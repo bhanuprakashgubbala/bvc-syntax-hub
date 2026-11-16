@@ -113,14 +113,61 @@ const STDIN_PRESETS = [
 ];
 
 const DEFAULT_CODE = {
-  python: "print('Hello Nextgen Labs!')\nfor i in range(5):\n    print(f'Count: {i}')",
-  javascript: "console.log('Hello Nextgen Labs!');\n[1, 2, 3, 4, 5].forEach(n => console.log(`Count: ${n}`));",
-  java: "public class Main {\n  public static void main(String[] args) {\n    System.out.println(\"Hello Nextgen Labs!\");\n    for (int i = 0; i < 5; i++) {\n      System.out.println(\"Count: \" + i);\n    }\n  }\n}",
-  cpp: "#include <iostream>\n\nint main() {\n    std::cout << \"Hello Nextgen Labs!\" << std::endl;\n    for (int i = 0; i < 5; ++i) {\n        std::cout << \"Count: \" << i << std::endl;\n    }\n    return 0;\n}",
-  c: "#include <stdio.h>\n\nint main() {\n    printf(\"Hello Nextgen Labs!\\n\");\n    for (int i = 0; i < 5; ++i) {\n        printf(\"Count: %d\\n\", i);\n    }\n    return 0;\n}",
-  typescript: "const message: string = 'Hello Nextgen Labs!';\nconsole.log(message);",
-  go: "package main\nimport \"fmt\"\n\nfunc main() {\n    fmt.Println(\"Hello Nextgen Labs!\")\n}",
-  rust: "fn main() {\n    println!(\"Hello Nextgen Labs!\");\n}"
+  python: `# BVC Syntax Hub - Python Environment
+print("Hello BVC Syntax Hub!")
+for i in range(1, 6):
+    print(f"Executing step {i}...")
+print("Execution completed successfully.")`,
+  javascript: `// BVC Syntax Hub - JavaScript Environment
+console.log("Hello BVC Syntax Hub!");
+[1, 2, 3, 4, 5].forEach(n => console.log(\`Executing step \${n}...\`));
+console.log("Execution completed successfully.");`,
+  java: `// BVC Syntax Hub - Java Environment
+public class Main {
+    public static void main(String[] args) {
+        System.out.println("Hello BVC Syntax Hub!");
+        for (int i = 1; i <= 5; i++) {
+            System.out.println("Executing step " + i + "...");
+        }
+        System.out.println("Execution completed successfully.");
+    }
+}`,
+  cpp: `// BVC Syntax Hub - C++ Environment
+#include <iostream>
+
+int main() {
+    std::cout << "Hello BVC Syntax Hub!" << std::endl;
+    for (int i = 1; i <= 5; ++i) {
+        std::cout << "Executing step " << i << "..." << std::endl;
+    }
+    std::cout << "Execution completed successfully." << std::endl;
+    return 0;
+}`,
+  c: `// BVC Syntax Hub - C Environment
+#include <stdio.h>
+
+int main() {
+    printf("Hello BVC Syntax Hub!\\n");
+    for (int i = 1; i <= 5; ++i) {
+        printf("Executing step %d...\\n", i);
+    }
+    printf("Execution completed successfully.\\n");
+    return 0;
+}`,
+  typescript: `// BVC Syntax Hub - TypeScript Environment
+const message: string = "Hello BVC Syntax Hub!";
+console.log(message);`,
+  go: `// BVC Syntax Hub - Go Environment
+package main
+import "fmt"
+
+func main() {
+    fmt.Println("Hello BVC Syntax Hub!")
+}`,
+  rust: `// BVC Syntax Hub - Rust Environment
+fn main() {
+    println!("Hello BVC Syntax Hub!");
+}`
 };
 
 // Helper to guess language from extension
@@ -381,15 +428,17 @@ function CodespaceContent() {
           const safeTitle = t.title ? t.title.replace(/[^a-zA-Z0-9]/g, '_').toLowerCase() : 'lab';
           const fileName = `exp_${t.experimentNumber || '01'}_${safeTitle}.${ext}`;
 
-          // Code to use: restore saved code if exists, otherwise blank
-          const codeToUse = data.observation?.programCode || '';
+          // Code to use: restore saved code if exists, or task starterCode, or language template
+          const templateCode = dynamicDefaultCode[normalizedLang] || DEFAULT_CODE[normalizedLang] || '';
+          const codeToUse = data.observation?.programCode || t.starterCode || templateCode;
 
           // Inject task file into fileSystem
           const fileId = `task-file-${t.id}`;
           setFileSystem(prev => {
             const existing = getFileById(prev, fileId);
             if (existing) {
-              return updateFileCode(prev, fileId, codeToUse);
+              const resolvedCode = data.observation?.programCode || (existing.code && existing.code.trim().length > 0 ? existing.code : codeToUse);
+              return updateFileCode(prev, fileId, resolvedCode);
             }
             const newTaskFile = {
               id: fileId,
@@ -615,7 +664,7 @@ function CodespaceContent() {
         type: "folder",
         isOpen: true,
         children: [
-          { id: "file-1", name: "main.py", type: "file", language: "python", code: "print('Hello Nextgen Labs!')\nfor i in range(5):\n    print(f'Count: {i}')", lastOutput: "", lastStdin: "" }
+          { id: "file-1", name: "main.py", type: "file", language: "python", code: "# BVC Syntax Hub - Python Environment\nprint('Hello BVC Syntax Hub!')\nfor i in range(1, 6):\n    print(f'Count: {i}')\nprint('Execution complete.')", lastOutput: "", lastStdin: "" }
         ]
       }
     ]);
@@ -1101,6 +1150,23 @@ function CodespaceContent() {
   const handleRunCode = async () => {
     if (!activeFile || isRunning) return;
 
+    const fileLang = activeFile.language || getLanguageFromFilename(activeFile.name) || 'java';
+    let codeToExecute = activeFile.code;
+
+    if (!codeToExecute || !codeToExecute.trim()) {
+      const defaultTemplate = dynamicDefaultCode[fileLang] || DEFAULT_CODE[fileLang] || '';
+      if (defaultTemplate) {
+        codeToExecute = defaultTemplate;
+        handleCodeChange(defaultTemplate);
+      } else {
+        setRightPanelTab("output");
+        setOutput("⚠️ Cannot execute empty code. Please type or load your code in the editor before running.");
+        setExitCode(1);
+        setIsExecutionSuccessful(false);
+        return;
+      }
+    }
+
     setIsRunning(true);
     setOutput("");
     setExecutionTime(null);
@@ -1117,8 +1183,8 @@ function CodespaceContent() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             file_id: activeFile.id,
-            language: activeFile.language,
-            code: activeFile.code,
+            language: fileLang,
+            code: codeToExecute,
             stdin: stdin,
             server: compilerEngine,
             autoFallback: autoFallback
@@ -1129,8 +1195,8 @@ function CodespaceContent() {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            language: activeFile.language,
-            code: activeFile.code,
+            language: fileLang,
+            code: codeToExecute,
             stdin: stdin,
             server: compilerEngine,
             autoFallback: autoFallback
