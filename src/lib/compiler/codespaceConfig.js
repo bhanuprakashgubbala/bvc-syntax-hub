@@ -1,0 +1,213 @@
+import fs from 'fs';
+import path from 'path';
+
+const CONFIG_FILE_PATH = path.join(process.cwd(), 'prisma', 'codespace-config.json');
+
+export const INITIAL_SERVERS = [
+  {
+    id: "default",
+    name: "Default Server",
+    badge: "Primary Local",
+    ping: "12ms",
+    desc: "Multi-Runtime Compiler Cluster",
+    iconColor: "text-emerald-400",
+    isDefault: true,
+    status: "online",
+    protocol: "judge0"
+  },
+  {
+    id: "onlinecompiler",
+    name: "OnlineCompiler.io",
+    badge: "Cloud Fast",
+    ping: "45ms",
+    desc: "Multi-Language Cloud Node",
+    iconColor: "text-cyan-400",
+    isDefault: false,
+    status: "online",
+    protocol: "onlinecompiler"
+  },
+  {
+    id: "codapi",
+    name: "Codapi Server",
+    badge: "Micro-VM",
+    ping: "78ms",
+    desc: "Sandboxed Web Runner",
+    iconColor: "text-violet-400",
+    isDefault: false,
+    status: "online",
+    protocol: "codapi"
+  },
+  {
+    id: "ce_judge",
+    name: "CE.Judge Server",
+    badge: "Judge Engine",
+    ping: "90ms",
+    desc: "ACM/ICPC Competitive Judge",
+    iconColor: "text-rose-400",
+    isDefault: false,
+    status: "online",
+    protocol: "judge0"
+  },
+  {
+    id: "jdoodle",
+    name: "JDoodle Server",
+    badge: "Production",
+    ping: "110ms",
+    desc: "Industrial Sandbox Engine",
+    iconColor: "text-amber-400",
+    isDefault: false,
+    status: "online",
+    protocol: "jdoodle"
+  }
+];
+
+export const INITIAL_LANGUAGES = [
+  {
+    id: "python",
+    name: "Python",
+    version: "3.10.15",
+    extension: ".py",
+    defaultCode: `# Python 3 Solution - BVCEC Code Space\ndef solve():\n    print("Hello from Python in BVCEC Code Space!")\n\nif __name__ == "__main__":\n    solve()\n`,
+    colorText: "text-blue-400",
+    colorBg: "bg-blue-500/10",
+    colorBorder: "border-blue-500/30",
+    colorDot: "bg-blue-400",
+    status: "active"
+  },
+  {
+    id: "java",
+    name: "Java",
+    version: "22.0.0",
+    extension: ".java",
+    defaultCode: `// Java Solution - BVCEC Code Space\nimport java.util.Scanner;\n\npublic class Solution {\n    public static void main(String[] args) {\n        System.out.println("Hello from Java in BVCEC Code Space!");\n    }\n}\n`,
+    colorText: "text-orange-400",
+    colorBg: "bg-orange-500/10",
+    colorBorder: "border-orange-500/30",
+    colorDot: "bg-orange-400",
+    status: "active"
+  },
+  {
+    id: "cpp",
+    name: "C++",
+    version: "13.2.0",
+    extension: ".cpp",
+    defaultCode: `// C++ Solution - BVCEC Code Space\n#include <iostream>\n\nint main() {\n    std::cout << "Hello from C++ in BVCEC Code Space!" << std::endl;\n    return 0;\n}\n`,
+    colorText: "text-cyan-400",
+    colorBg: "bg-cyan-500/10",
+    colorBorder: "border-cyan-500/30",
+    colorDot: "bg-cyan-400",
+    status: "active"
+  },
+  {
+    id: "c",
+    name: "C",
+    version: "13.2.0",
+    extension: ".c",
+    defaultCode: `// C Solution - BVCEC Code Space\n#include <stdio.h>\n\nint main() {\n    printf("Hello from C in BVCEC Code Space!\\n");\n    return 0;\n}\n`,
+    colorText: "text-zinc-300",
+    colorBg: "bg-zinc-500/10",
+    colorBorder: "border-zinc-500/30",
+    colorDot: "bg-zinc-400",
+    status: "active"
+  },
+  {
+    id: "javascript",
+    name: "JavaScript",
+    version: "20.17.0",
+    extension: ".js",
+    defaultCode: `// JavaScript Solution - BVCEC Code Space\nconsole.log("Hello from JavaScript in BVCEC Code Space!");\n`,
+    colorText: "text-yellow-400",
+    colorBg: "bg-yellow-500/10",
+    colorBorder: "border-yellow-500/30",
+    colorDot: "bg-yellow-400",
+    status: "active"
+  },
+  {
+    id: "typescript",
+    name: "TypeScript",
+    version: "5.6.2",
+    extension: ".ts",
+    defaultCode: `// TypeScript Solution - BVCEC Code Space\nconst greeting: string = "Hello from TypeScript in BVCEC Code Space!";\nconsole.log(greeting);\n`,
+    colorText: "text-blue-300",
+    colorBg: "bg-blue-500/10",
+    colorBorder: "border-blue-500/30",
+    colorDot: "bg-blue-300",
+    status: "active"
+  },
+  {
+    id: "go",
+    name: "Go",
+    version: "1.23.1",
+    extension: ".go",
+    defaultCode: `// Go Solution - BVCEC Code Space\npackage main\n\nimport "fmt"\n\nfunc main() {\n    fmt.Println("Hello from Go in BVCEC Code Space!")\n}\n`,
+    colorText: "text-teal-400",
+    colorBg: "bg-teal-500/10",
+    colorBorder: "border-teal-500/30",
+    colorDot: "bg-teal-400",
+    status: "active"
+  },
+  {
+    id: "rust",
+    name: "Rust",
+    version: "1.81.0",
+    extension: ".rs",
+    defaultCode: `// Rust Solution - BVCEC Code Space\nfn main() {\n    println!("Hello from Rust in BVCEC Code Space!");\n}\n`,
+    colorText: "text-amber-500",
+    colorBg: "bg-amber-500/10",
+    colorBorder: "border-amber-500/30",
+    colorDot: "bg-amber-500",
+    status: "active"
+  }
+];
+
+export const INITIAL_SETTINGS = {
+  executionTimeoutSec: 10,
+  defaultServerId: "default",
+  defaultLanguageId: "python",
+  allowStudentCustomStdin: true,
+  enableAiAssistance: true,
+  systemAnnouncement: "BVCEC Code Space: All compiler servers operational."
+};
+
+let cachedConfig = null;
+
+export function getCodeSpaceConfig() {
+  if (cachedConfig) {
+    return cachedConfig;
+  }
+
+  try {
+    if (fs.existsSync(CONFIG_FILE_PATH)) {
+      const data = fs.readFileSync(CONFIG_FILE_PATH, 'utf-8');
+      cachedConfig = JSON.parse(data);
+      return cachedConfig;
+    }
+  } catch (err) {
+    console.warn('Error reading codespace-config.json:', err.message);
+  }
+
+  // Fallback to default
+  const defaultConfig = {
+    servers: INITIAL_SERVERS,
+    languages: INITIAL_LANGUAGES,
+    settings: INITIAL_SETTINGS,
+    updatedAt: new Date().toISOString()
+  };
+
+  saveCodeSpaceConfig(defaultConfig);
+  return defaultConfig;
+}
+
+export function saveCodeSpaceConfig(config) {
+  try {
+    cachedConfig = {
+      ...config,
+      updatedAt: new Date().toISOString()
+    };
+    fs.writeFileSync(CONFIG_FILE_PATH, JSON.stringify(cachedConfig, null, 2), 'utf-8');
+    return true;
+  } catch (err) {
+    console.error('Error saving codespace-config.json:', err.message);
+    return false;
+  }
+}

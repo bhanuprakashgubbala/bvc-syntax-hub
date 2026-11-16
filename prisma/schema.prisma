@@ -1,0 +1,243 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+model User {
+  id            String       @id @default(cuid())
+  email         String       @unique
+  password      String
+  fullName      String
+  role          String       @default("STUDENT") // STUDENT | FACULTY | HOD | ADMIN
+  rollNumber    String?      @unique
+  employeeId    String?
+  studentId     String?      @unique
+  organization  String       @default("Bonam Venkatachalam Engineering College")
+  college       String       @default("BVCEC")
+  department    String?      @default("Computer Science & Engineering")
+  batchYear     String?
+  sectionId     String?
+  phone         String?
+  totalPoints   Int          @default(0)
+  workspaceData String?
+  emailVerified DateTime?
+  createdAt     DateTime     @default(now())
+
+  // Relationships
+  section       Section?     @relation(fields: [sectionId], references: [id])
+  submissions   Submission[]
+  allocations   FacultyAllocation[] @relation("FacultyAllocations")
+  createdTasks  Task[]       @relation("CreatedTasks")
+  observations  DigitalObservation[]
+  evaluations   DigitalObservation[] @relation("FacultyEvaluations")
+  auditLogs     AuditLog[]
+}
+
+model Department {
+  id          String    @id @default(cuid())
+  code        String    @unique // e.g. "CSE"
+  name        String    // "Computer Science and Engineering"
+  college     String    @default("Bonam Venkatachalam Engineering College, Odalaravu")
+  sections    Section[]
+  subjects    Subject[]
+  createdAt   DateTime  @default(now())
+}
+
+model Section {
+  id           String       @id @default(cuid())
+  name         String       // e.g. "CSE-A", "CSE-B", "CSE-C"
+  departmentId String?
+  academicYear String       @default("2025-2026")
+  semester     String       @default("IV Semester (2-2)")
+  createdAt    DateTime     @default(now())
+
+  department   Department?  @relation(fields: [departmentId], references: [id])
+  students     User[]
+  allocations  FacultyAllocation[]
+  tasks        Task[]
+  observations DigitalObservation[]
+
+  @@unique([name, academicYear])
+}
+
+model Subject {
+  id           String       @id @default(cuid())
+  code         String       @unique // e.g. "CS201", "CS202"
+  name         String       // "Java Programming", "Python", "Data Structures"
+  departmentId String?
+  createdAt    DateTime     @default(now())
+
+  department   Department?  @relation(fields: [departmentId], references: [id])
+  allocations  FacultyAllocation[]
+  tasks        Task[]
+  observations DigitalObservation[]
+}
+
+model FacultyAllocation {
+  id           String    @id @default(cuid())
+  facultyId    String
+  subjectId    String
+  sectionId    String
+  academicYear String    @default("2025-2026")
+  createdAt    DateTime  @default(now())
+
+  faculty      User      @relation("FacultyAllocations", fields: [facultyId], references: [id], onDelete: Cascade)
+  subject      Subject   @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  section      Section   @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+
+  @@unique([facultyId, subjectId, sectionId, academicYear])
+}
+
+model Task {
+  id               String       @id @default(cuid())
+  title            String       // e.g. "Experiment 01: Matrix Multiplication"
+  experimentNumber String       // e.g. "01", "02"
+  description      String
+  aim              String?
+  instructions     String?
+  language         String       @default("java") // java, python, c, cpp
+  starterCode      String?
+  maxMarks         Int          @default(20)
+  openTime         DateTime
+  closeTime        DateTime
+  isPublished      Boolean      @default(true)
+  testCases        String?      // JSON array of test cases
+  expectedOutput   String?
+  createdAt        DateTime     @default(now())
+
+  facultyId        String
+  subjectId        String
+  sectionId        String
+
+  faculty          User         @relation("CreatedTasks", fields: [facultyId], references: [id], onDelete: Cascade)
+  subject          Subject      @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  section          Section      @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+  observations     DigitalObservation[]
+}
+
+model DigitalObservation {
+  id                     String    @id @default(cuid())
+  taskId                 String
+  studentId              String
+  facultyId              String?
+  sectionId              String?
+  subjectId              String?
+
+  experimentNumber       String
+  experimentName         String
+  date                   String    // Submission date e.g. "14-11-2026"
+  aim                    String
+  algorithm              String
+  programCode            String
+  executionOutput        String
+  result                 String
+  studentRemarks         String?
+
+  // Immutable Execution Snapshot
+  executedCodeSnapshot   String?
+  executedOutputSnapshot String?
+  executedLanguage       String?
+  executionStatus        String?   @default("SUCCESS")
+  hasManualModifications Boolean   @default(false)
+
+  // Automated 10-Marks AI Evaluation Report
+  aiRecommendedMarks     Float?
+  aiEvaluationReport     String?   // JSON object with breakdown
+
+  // Faculty Final Evaluation & Authority
+  facultyFinalMarks      Float?
+  facultyRemarks         String?
+  facultyAction          String?   // "APPROVED" | "MODIFIED" | "CORRECTION_REQUIRED" | "REJECTED"
+
+  status                 String    @default("NOT_STARTED") // NOT_STARTED | CODING_IN_PROGRESS | EXECUTION_SUCCESSFUL | OBSERVATION_PENDING | SUBMITTED_FOR_EVALUATION | AI_EVALUATION_COMPLETED | FACULTY_REVIEW_PENDING | CORRECTION_REQUIRED | RESUBMITTED | APPROVED | REJECTED
+  marksAwarded           Int?
+  feedback               String?
+  evaluatedAt            DateTime?
+  submittedAt            DateTime  @default(now())
+  isLate                 Boolean   @default(false)
+  executionSuccessful    Boolean   @default(true)
+
+  task                   Task      @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  student                User      @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  faculty                User?     @relation("FacultyEvaluations", fields: [facultyId], references: [id])
+  section                Section?  @relation(fields: [sectionId], references: [id])
+  subject                Subject?  @relation(fields: [subjectId], references: [id])
+  history                ObservationHistory[]
+
+  @@unique([taskId, studentId])
+}
+
+model ObservationHistory {
+  id                     String   @id @default(cuid())
+  observationId          String
+  version                Int      @default(1)
+  action                 String   // "SUBMITTED" | "AI_EVALUATED" | "FACULTY_REVIEWED" | "CORRECTION_REQUESTED" | "RESUBMITTED" | "APPROVED" | "REJECTED"
+  submittedAt            DateTime @default(now())
+  aim                    String?
+  algorithm              String?
+  programCode            String?
+  executionOutput        String?
+  result                 String?
+  studentRemarks         String?
+  executedCodeSnapshot   String?
+  executedOutputSnapshot String?
+  hasManualModifications Boolean  @default(false)
+  aiRecommendedMarks     Float?
+  aiEvaluationReport     String?  // JSON
+  facultyFinalMarks      Float?
+  facultyRemarks         String?
+  status                 String
+
+  observation            DigitalObservation @relation(fields: [observationId], references: [id], onDelete: Cascade)
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  userId    String?
+  role      String?
+  action    String
+  details   String?
+  ipAddress String?
+  createdAt DateTime @default(now())
+
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+}
+
+model VerificationCode {
+  id        String   @id @default(cuid())
+  email     String
+  code      String
+  expiresAt DateTime
+  attempts  Int      @default(0)
+  createdAt DateTime @default(now())
+
+  @@index([email])
+}
+
+model Problem {
+  id          String       @id @default(cuid())
+  title       String
+  difficulty  String
+  description String
+  points      Int          @default(10)
+  createdAt   DateTime     @default(now())
+  submissions Submission[]
+}
+
+model Submission {
+  id              String   @id @default(cuid())
+  userId          String
+  problemId       String
+  language        String
+  code            String
+  status          String
+  executionTimeMs Int?
+  createdAt       DateTime @default(now())
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  problem Problem @relation(fields: [problemId], references: [id], onDelete: Cascade)
+}
