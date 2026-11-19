@@ -1,40 +1,7 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { parseStudentRegisterNumber } from '@/lib/studentParser';
-
-function getInitialWorkspace(studentName, branchShort) {
-  return JSON.stringify({
-    fileSystem: [
-      {
-        id: 'folder-src',
-        name: `${branchShort || 'Lab'} Workspace`,
-        type: 'folder',
-        isOpen: true,
-        children: [
-          {
-            id: 'file-main-py',
-            name: 'main.py',
-            type: 'file',
-            language: 'python',
-            code: `# Personal Codespace for ${studentName} (${branchShort || 'Engineering'})\nprint("Welcome to your personal Codespace!")\n`,
-            lastOutput: '',
-            lastStdin: '',
-          },
-          {
-            id: 'file-solution-java',
-            name: 'Solution.java',
-            type: 'file',
-            language: 'java',
-            code: `public class Solution {\n    public static void main(String[] args) {\n        System.out.println("BVCEC Lab Environment Ready.");\n    }\n}\n`,
-            lastOutput: '',
-            lastStdin: '',
-          },
-        ],
-      },
-    ],
-    activeFileId: 'file-main-py',
-  });
-}
+import { getInitialWorkspace } from '@/lib/workspaceHelper';
 
 export async function POST(req) {
   try {

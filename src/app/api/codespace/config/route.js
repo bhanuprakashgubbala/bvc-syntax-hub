@@ -159,7 +159,7 @@ export async function POST(req) {
           name: name.trim(),
           version: version?.trim() || 'Latest',
           extension: extension?.startsWith('.') ? extension.trim() : `.${extension?.trim() || cleanId}`,
-          defaultCode: defaultCode || `// ${name.trim()} Solution - BVCEC Code Space\n`,
+          defaultCode: defaultCode || '',
           colorText: payload.colorText || 'text-violet-400',
           colorBg: payload.colorBg || 'bg-violet-500/10',
           colorBorder: payload.colorBorder || 'border-violet-500/30',

@@ -32,22 +32,40 @@ export default function HodLayout({ children }) {
   const [hodUser, setHodUser] = useState(null);
 
   useEffect(() => {
-    const role = localStorage.getItem('bvcec-user-role');
+    const role = (localStorage.getItem('bvcec-user-role') || localStorage.getItem('nextgen-user-role') || '').toUpperCase();
     const name = localStorage.getItem('bvcec-user-name');
     const email = localStorage.getItem('bvcec-user-email');
+    const id = localStorage.getItem('bvcec-user-id');
+
+    // Strict Role Guard
+    if (role === 'STUDENT') {
+      router.replace('/user');
+      return;
+    }
+    if (role === 'FACULTY') {
+      router.replace('/faculty');
+      return;
+    }
+    if (!id && !role) {
+      router.replace('/login?role=hod');
+      return;
+    }
+
     if (name) {
       setHodUser({ name, email, role: role || 'HOD' });
     } else {
       setHodUser({ name: 'Dr. B S N Murthy', email: 'hod.cse@bvcgroup.in', role: 'HOD' });
     }
-  }, []);
+  }, [router]);
 
   const handleLogout = () => {
     localStorage.removeItem('bvcec-user-role');
     localStorage.removeItem('bvcec-user-id');
     localStorage.removeItem('bvcec-user-name');
     localStorage.removeItem('bvcec-user-email');
-    router.push('/login');
+    localStorage.removeItem('nextgen-user-role');
+    localStorage.removeItem('nextgen-user-id');
+    router.push('/login?logout=true&role=hod');
   };
 
   return (

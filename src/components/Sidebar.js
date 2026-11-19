@@ -144,31 +144,19 @@ export default function Sidebar() {
         ))}
       </nav>
 
-      {/* Role Switcher Pill Bar (Student / Faculty / HOD) */}
+      {/* Institutional Student Status Bar */}
       <div className="p-3 border-t border-white/[0.08] bg-[#0A0B10] space-y-2 mt-auto">
         <div className="flex items-center justify-between px-1">
-          <span className="text-[10px] font-mono font-bold text-zinc-500 uppercase">Portals</span>
+          <span className="text-[10px] font-mono font-bold text-zinc-500 uppercase">Student Portal</span>
           <span className="text-[10px] font-mono text-emerald-400 flex items-center gap-1">
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
             Online
           </span>
         </div>
 
-        <div className="grid grid-cols-2 gap-1.5">
-          <Link
-            href="/faculty"
-            className="flex items-center justify-center gap-1 px-2.5 py-1.5 rounded-lg bg-zinc-900/80 hover:bg-zinc-800 text-[11px] font-semibold text-zinc-300 hover:text-white border border-white/[0.06] transition-colors"
-          >
-            <span>Faculty</span>
-            <ExternalLink className="w-2.5 h-2.5 text-zinc-500" />
-          </Link>
-          <Link
-            href="/hod"
-            className="flex items-center justify-center gap-1 px-2.5 py-1.5 rounded-lg bg-zinc-900/80 hover:bg-zinc-800 text-[11px] font-semibold text-zinc-300 hover:text-white border border-white/[0.06] transition-colors"
-          >
-            <span>HOD</span>
-            <ExternalLink className="w-2.5 h-2.5 text-zinc-500" />
-          </Link>
+        <div className="p-2.5 rounded-xl bg-zinc-900/60 border border-white/[0.06] text-center">
+          <p className="text-[11px] font-semibold text-zinc-300">BVCEC Autonomous</p>
+          <p className="text-[10px] text-zinc-500 font-mono mt-0.5">CSE Digital Lab Environment</p>
         </div>
       </div>
     </aside>

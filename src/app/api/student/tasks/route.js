@@ -3,11 +3,23 @@ import { db } from '@/lib/db';
 
 export const dynamic = 'force-dynamic';
 
+const tasksCache = new Map();
+const CACHE_TTL_MS = 8000;
+
 export async function GET(req) {
   try {
     const { searchParams } = new URL(req.url);
     const studentId = searchParams.get('studentId');
     const rollNumber = searchParams.get('rollNumber');
+    const cacheKey = `${studentId || ''}_${rollNumber || ''}`;
+
+    const nowTime = Date.now();
+    const cached = tasksCache.get(cacheKey);
+    if (cached && nowTime - cached.timestamp < CACHE_TTL_MS) {
+      return NextResponse.json(cached.data, {
+        headers: { 'Cache-Control': 'private, max-age=8, stale-while-revalidate=15' }
+      });
+    }
 
     let student = null;
     if (studentId) {
@@ -84,15 +96,24 @@ export async function GET(req) {
           marksAwarded: observation.facultyFinalMarks ?? observation.marksAwarded,
           facultyFinalMarks: observation.facultyFinalMarks,
           aiRecommendedMarks: observation.aiRecommendedMarks,
+          aiEvaluationReport: observation.aiEvaluationReport,
+          aim: observation.aim || t.aim || '',
+          algorithm: observation.algorithm || '',
+          programCode: observation.programCode || '',
+          executionOutput: observation.executionOutput || '',
+          result: observation.result || '',
+          date: observation.date || '',
           submittedAt: observation.submittedAt,
+          evaluatedAt: observation.evaluatedAt,
           feedback: observation.facultyRemarks || observation.feedback,
           facultyRemarks: observation.facultyRemarks || observation.feedback,
-          facultyAction: observation.facultyAction
+          facultyAction: observation.facultyAction,
+          facultyName: t.faculty?.fullName || 'Faculty Member'
         } : null
       };
     });
 
-    return NextResponse.json({
+    const responseData = {
       success: true,
       student: student ? {
         id: student.id,
@@ -101,6 +122,12 @@ export async function GET(req) {
         section: student.section?.name || 'CSE-A'
       } : null,
       tasks: formattedTasks
+    };
+
+    tasksCache.set(cacheKey, { data: responseData, timestamp: nowTime });
+
+    return NextResponse.json(responseData, {
+      headers: { 'Cache-Control': 'private, max-age=8, stale-while-revalidate=15' }
     });
   } catch (error) {
     console.error('Error fetching student tasks:', error);

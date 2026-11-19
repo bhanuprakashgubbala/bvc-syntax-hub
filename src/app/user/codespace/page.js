@@ -113,61 +113,14 @@ const STDIN_PRESETS = [
 ];
 
 const DEFAULT_CODE = {
-  python: `# BVC Syntax Hub - Python Environment
-print("Hello BVC Syntax Hub!")
-for i in range(1, 6):
-    print(f"Executing step {i}...")
-print("Execution completed successfully.")`,
-  javascript: `// BVC Syntax Hub - JavaScript Environment
-console.log("Hello BVC Syntax Hub!");
-[1, 2, 3, 4, 5].forEach(n => console.log(\`Executing step \${n}...\`));
-console.log("Execution completed successfully.");`,
-  java: `// BVC Syntax Hub - Java Environment
-public class Main {
-    public static void main(String[] args) {
-        System.out.println("Hello BVC Syntax Hub!");
-        for (int i = 1; i <= 5; i++) {
-            System.out.println("Executing step " + i + "...");
-        }
-        System.out.println("Execution completed successfully.");
-    }
-}`,
-  cpp: `// BVC Syntax Hub - C++ Environment
-#include <iostream>
-
-int main() {
-    std::cout << "Hello BVC Syntax Hub!" << std::endl;
-    for (int i = 1; i <= 5; ++i) {
-        std::cout << "Executing step " << i << "..." << std::endl;
-    }
-    std::cout << "Execution completed successfully." << std::endl;
-    return 0;
-}`,
-  c: `// BVC Syntax Hub - C Environment
-#include <stdio.h>
-
-int main() {
-    printf("Hello BVC Syntax Hub!\\n");
-    for (int i = 1; i <= 5; ++i) {
-        printf("Executing step %d...\\n", i);
-    }
-    printf("Execution completed successfully.\\n");
-    return 0;
-}`,
-  typescript: `// BVC Syntax Hub - TypeScript Environment
-const message: string = "Hello BVC Syntax Hub!";
-console.log(message);`,
-  go: `// BVC Syntax Hub - Go Environment
-package main
-import "fmt"
-
-func main() {
-    fmt.Println("Hello BVC Syntax Hub!")
-}`,
-  rust: `// BVC Syntax Hub - Rust Environment
-fn main() {
-    println!("Hello BVC Syntax Hub!");
-}`
+  python: "",
+  javascript: "",
+  java: "",
+  cpp: "",
+  c: "",
+  typescript: "",
+  go: "",
+  rust: ""
 };
 
 // Helper to guess language from extension
@@ -236,6 +189,136 @@ function CodespaceContent() {
   const [searchQuery, setSearchQuery] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [isExplorerOpen, setIsExplorerOpen] = useState(true);
+
+  // Draggable Slot Space Occupancy States (Files, Coding Notepad & Output Slide)
+  const [sidebarWidth, setSidebarWidth] = useState(220); // Files slot width in px
+  const [outputWidth, setOutputWidth] = useState(420);   // Output slide slot width in px
+  const [isOutputCollapsed, setIsOutputCollapsed] = useState(false);
+  const [activeResizer, setActiveResizer] = useState(null); // 'sidebar' | 'output' | null
+  const [showLayoutMenu, setShowLayoutMenu] = useState(false);
+  const workspaceBodyRef = useRef(null);
+  const layoutMenuRef = useRef(null);
+
+  // Restore saved slot space occupancy widths & handle outside layout menu clicks
+  useEffect(() => {
+    try {
+      const savedSidebar = localStorage.getItem('bvcec-codespace-sidebar-width');
+      const savedOutput = localStorage.getItem('bvcec-codespace-output-width');
+      if (savedSidebar) {
+        const sw = parseInt(savedSidebar, 10);
+        if (!isNaN(sw) && sw >= 140 && sw <= 500) setSidebarWidth(sw);
+      }
+      if (savedOutput) {
+        const ow = parseInt(savedOutput, 10);
+        if (!isNaN(ow) && ow >= 220 && ow <= 900) setOutputWidth(ow);
+      }
+    } catch (e) {}
+
+    const handleOutsideClick = (e) => {
+      if (layoutMenuRef.current && !layoutMenuRef.current.contains(e.target)) {
+        setShowLayoutMenu(false);
+      }
+    };
+    document.addEventListener('mousedown', handleOutsideClick);
+    return () => document.removeEventListener('mousedown', handleOutsideClick);
+  }, []);
+
+  // Drag-to-Resize Space Occupancy Handlers
+  const startResizingSidebar = (e) => {
+    e.preventDefault();
+    setActiveResizer('sidebar');
+  };
+
+  const startResizingOutput = (e) => {
+    e.preventDefault();
+    setActiveResizer('output');
+  };
+
+  useEffect(() => {
+    if (!activeResizer) return;
+
+    const handleMouseMove = (e) => {
+      if (!workspaceBodyRef.current) return;
+      const rect = workspaceBodyRef.current.getBoundingClientRect();
+
+      if (activeResizer === 'sidebar') {
+        const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+        const newWidth = Math.max(140, Math.min(480, clientX - rect.left));
+        setSidebarWidth(Math.round(newWidth));
+      } else if (activeResizer === 'output') {
+        const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+        const maxOut = Math.max(260, rect.width - (isExplorerOpen ? sidebarWidth : 0) - 260);
+        const newWidth = Math.max(240, Math.min(maxOut, rect.right - clientX));
+        setOutputWidth(Math.round(newWidth));
+        if (isOutputCollapsed) setIsOutputCollapsed(false);
+      }
+    };
+
+    const handleMouseUp = () => {
+      setActiveResizer(null);
+      try {
+        localStorage.setItem('bvcec-codespace-sidebar-width', String(sidebarWidth));
+        localStorage.setItem('bvcec-codespace-output-width', String(outputWidth));
+      } catch (e) {}
+      setTimeout(() => {
+        editorRef.current?.layout();
+      }, 50);
+    };
+
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+    window.addEventListener('touchmove', handleMouseMove);
+    window.addEventListener('touchend', handleMouseUp);
+
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+      window.removeEventListener('touchmove', handleMouseMove);
+      window.removeEventListener('touchend', handleMouseUp);
+    };
+  }, [activeResizer, sidebarWidth, outputWidth, isExplorerOpen, isOutputCollapsed]);
+
+  const applyLayoutPreset = (preset) => {
+    if (preset === 'default') {
+      setSidebarWidth(220);
+      setOutputWidth(420);
+      setIsExplorerOpen(true);
+      setIsOutputCollapsed(false);
+      try {
+        localStorage.setItem('bvcec-codespace-sidebar-width', '220');
+        localStorage.setItem('bvcec-codespace-output-width', '420');
+      } catch (e) {}
+    } else if (preset === 'wide_notepad') {
+      setSidebarWidth(170);
+      setOutputWidth(300);
+      setIsExplorerOpen(true);
+      setIsOutputCollapsed(false);
+      try {
+        localStorage.setItem('bvcec-codespace-sidebar-width', '170');
+        localStorage.setItem('bvcec-codespace-output-width', '300');
+      } catch (e) {}
+    } else if (preset === 'wide_output') {
+      setSidebarWidth(170);
+      setOutputWidth(580);
+      setIsExplorerOpen(true);
+      setIsOutputCollapsed(false);
+      try {
+        localStorage.setItem('bvcec-codespace-sidebar-width', '170');
+        localStorage.setItem('bvcec-codespace-output-width', '580');
+      } catch (e) {}
+    } else if (preset === 'focus_notepad') {
+      setIsExplorerOpen(false);
+      setOutputWidth(320);
+      setIsOutputCollapsed(false);
+      try {
+        localStorage.setItem('bvcec-codespace-output-width', '320');
+      } catch (e) {}
+    }
+    setShowLayoutMenu(false);
+    setTimeout(() => {
+      editorRef.current?.layout();
+    }, 50);
+  };
 
   // Editor State
   const [stdin, setStdin] = useState("");
@@ -641,7 +724,38 @@ function CodespaceContent() {
         const data = await res.json();
         if (res.ok && data.success && data.workspaceData) {
           const parsed = JSON.parse(data.workspaceData);
-          setFileSystem(parsed.fileSystem || []);
+          const isBoilerplateCode = (str) => {
+            if (!str || !str.trim()) return false;
+            const lower = str.toLowerCase();
+            return (
+              lower.includes('personal codespace for') ||
+              lower.includes('welcome to your personal codespace') ||
+              lower.includes('hello bvc syntax hub') ||
+              lower.includes('executing step') ||
+              lower.includes('codex environment initialized') ||
+              lower.includes('bvcec cse lab environment ready') ||
+              lower.includes('bvcec lab environment ready') ||
+              lower.includes('hello nextgen labs') ||
+              lower.includes('hello from bvcec') ||
+              lower.includes('hello adsc students') ||
+              lower.includes('faculty workspace:') ||
+              lower.includes('problem: write your solution below') ||
+              lower.includes('solution - bvcec code space')
+            );
+          };
+          const sanitizeBoilerplate = (nodes) => {
+            return (nodes || []).map(node => {
+              if (node.type === 'file' && node.code && isBoilerplateCode(node.code)) {
+                return { ...node, code: '' };
+              }
+              if (node.children) {
+                return { ...node, children: sanitizeBoilerplate(node.children) };
+              }
+              return node;
+            });
+          };
+          const cleanedFS = sanitizeBoilerplate(parsed.fileSystem || []);
+          setFileSystem(cleanedFS);
           setActiveFileId(parsed.activeFileId || null);
         } else {
           initializeDefault();
@@ -664,7 +778,7 @@ function CodespaceContent() {
         type: "folder",
         isOpen: true,
         children: [
-          { id: "file-1", name: "main.py", type: "file", language: "python", code: "# BVC Syntax Hub - Python Environment\nprint('Hello BVC Syntax Hub!')\nfor i in range(1, 6):\n    print(f'Count: {i}')\nprint('Execution complete.')", lastOutput: "", lastStdin: "" }
+          { id: "file-1", name: "main.py", type: "file", language: "python", code: "", lastOutput: "", lastStdin: "" }
         ]
       }
     ]);
@@ -832,10 +946,9 @@ function CodespaceContent() {
 
   const handleResetCode = () => {
     if (!activeFile) return;
-    if (window.confirm(`Reset "${activeFile.name}" to default starter code template? Current edits in this file will be reset.`)) {
-      const template = dynamicDefaultCode[activeFile.language] || DEFAULT_CODE[activeFile.language] || "// Start coding here";
-      setFileSystem(prev => updateFileCode(prev, activeFile.id, template));
-      setAiNotification("🔄 Reset code to starter template.");
+    if (window.confirm(`Clear code in "${activeFile.name}" to start fresh with an empty file?`)) {
+      setFileSystem(prev => updateFileCode(prev, activeFile.id, ""));
+      setAiNotification("🔄 Cleared code in editor.");
       setTimeout(() => setAiNotification(""), 2500);
     }
   };
@@ -1008,6 +1121,26 @@ function CodespaceContent() {
     return false;
   };
 
+  const isBoilerplate = (str) => {
+    if (!str || !str.trim()) return true;
+    const lower = str.toLowerCase();
+    return (
+      lower.includes('personal codespace for') ||
+      lower.includes('welcome to your personal codespace') ||
+      lower.includes('hello bvc syntax hub') ||
+      lower.includes('executing step') ||
+      lower.includes('codex environment initialized') ||
+      lower.includes('bvcec cse lab environment ready') ||
+      lower.includes('bvcec lab environment ready') ||
+      lower.includes('hello nextgen labs') ||
+      lower.includes('hello from bvcec') ||
+      lower.includes('hello adsc students') ||
+      lower.includes('faculty workspace:') ||
+      lower.includes('problem: write your solution below') ||
+      lower.includes('solution - bvcec code space')
+    );
+  };
+
   const updateFileLanguage = (nodes, id, newLang) => {
     return nodes.map(node => {
       if (node.id === id) {
@@ -1020,14 +1153,13 @@ function CodespaceContent() {
           newName = `${newName}.${ext}`;
         }
 
-        const shouldReplace = isStarterOrEmptyCode(node.code);
-        const newCode = shouldReplace ? (dynamicDefaultCode[newLang] || DEFAULT_CODE[newLang] || node.code) : node.code;
+        const cleanCode = isBoilerplate(node.code) ? "" : (node.code ?? "");
 
         return { 
           ...node, 
           language: newLang,
           name: newName,
-          code: newCode
+          code: cleanCode
         };
       }
       if (node.children) {
@@ -1085,12 +1217,21 @@ function CodespaceContent() {
     }
 
     if (modalState.type === 'folder') {
+      const newEmptyFile = {
+        id: `file-${Date.now()}`,
+        name: 'main.py',
+        type: 'file',
+        language: 'python',
+        code: '', // Clean empty notepad ready to write program directly
+        lastOutput: '',
+        lastStdin: ''
+      };
       const newFolder = {
         id: `folder-${Date.now()}`,
         name: name,
         type: "folder",
         isOpen: true,
-        children: []
+        children: [newEmptyFile]
       };
       
       let updatedFS = [...fileSystem];
@@ -1111,6 +1252,7 @@ function CodespaceContent() {
 
       setFileSystem(updatedFS);
       setSelectedFolderId(newFolder.id);
+      setActiveFileId(newEmptyFile.id);
     } else if (modalState.type === 'file') {
       const lang = getLanguageFromFilename(name);
       const newFile = {
@@ -1118,7 +1260,7 @@ function CodespaceContent() {
         name: name,
         type: "file",
         language: lang,
-        code: dynamicDefaultCode[lang] || DEFAULT_CODE[lang] || "// Start coding here",
+        code: "", // Empty tab as requested - no default boilerplate
         lastOutput: "",
         lastStdin: ""
       };
@@ -1154,17 +1296,11 @@ function CodespaceContent() {
     let codeToExecute = activeFile.code;
 
     if (!codeToExecute || !codeToExecute.trim()) {
-      const defaultTemplate = dynamicDefaultCode[fileLang] || DEFAULT_CODE[fileLang] || '';
-      if (defaultTemplate) {
-        codeToExecute = defaultTemplate;
-        handleCodeChange(defaultTemplate);
-      } else {
-        setRightPanelTab("output");
-        setOutput("⚠️ Cannot execute empty code. Please type or load your code in the editor before running.");
-        setExitCode(1);
-        setIsExecutionSuccessful(false);
-        return;
-      }
+      setRightPanelTab("output");
+      setOutput("⚠️ Cannot execute empty file. Please type your code in the editor before clicking Run.");
+      setExitCode(1);
+      setIsExecutionSuccessful(false);
+      return;
     }
 
     setIsRunning(true);
@@ -1345,8 +1481,34 @@ function CodespaceContent() {
               className={`flex items-center gap-2 px-2.5 py-1.5 text-xs rounded-lg cursor-pointer transition-all ${isSelected ? 'bg-violet-500/20 text-violet-300 border border-violet-500/30' : 'text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800/60'}`}
               style={{ paddingLeft: `${(depth * 12) + 8}px` }}
               onClick={() => {
-                setFileSystem(toggleFolder(fileSystem, node.id));
+                const updatedFS = toggleFolder(fileSystem, node.id);
                 setSelectedFolderId(node.id);
+                const target = getFileById(updatedFS, node.id);
+                if (target && target.type === 'folder') {
+                  const emptyFile = (target.children || []).find(c => c.type === 'file' && (!c.code || !c.code.trim()));
+                  if (emptyFile) {
+                    setActiveFileId(emptyFile.id);
+                  } else if (!target.children || target.children.length === 0) {
+                    const newEmpty = {
+                      id: `file-${Date.now()}`,
+                      name: 'main.py',
+                      type: 'file',
+                      language: 'python',
+                      code: '',
+                      lastOutput: '',
+                      lastStdin: ''
+                    };
+                    target.children = [newEmpty];
+                    target.isOpen = true;
+                    setActiveFileId(newEmpty.id);
+                  } else {
+                    const firstFile = (target.children || []).find(c => c.type === 'file');
+                    if (firstFile) {
+                      setActiveFileId(firstFile.id);
+                    }
+                  }
+                }
+                setFileSystem(updatedFS);
               }}
             >
               {node.isOpen ? <ChevronDown className="w-3.5 h-3.5 text-zinc-500" /> : <ChevronRight className="w-3.5 h-3.5 text-zinc-500" />}
@@ -2180,6 +2342,166 @@ function CodespaceContent() {
               {isFullscreen ? <Minimize className="w-3.5 h-3.5" /> : <Maximize className="w-3.5 h-3.5" />}
             </button>
 
+            {/* Space Occupancy / Layout Adjustment Control */}
+            <div className="relative shrink-0" ref={layoutMenuRef}>
+              <button
+                onClick={() => setShowLayoutMenu(!showLayoutMenu)}
+                className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border text-xs font-semibold transition-all cursor-pointer ${
+                  showLayoutMenu
+                    ? 'bg-violet-600/25 text-violet-200 border-violet-500/40 shadow-[0_0_12px_rgba(139,92,246,0.3)]'
+                    : 'bg-zinc-900/80 hover:bg-zinc-800 text-zinc-300 hover:text-white border-white/[0.06]'
+                }`}
+                title="Adjust Space Occupancy of Files, Coding Notepad & Output Slots"
+              >
+                <Sliders className="w-3.5 h-3.5 text-violet-400" />
+                <span className="hidden xl:inline">Adjust Space</span>
+                <ChevronDown className={`w-3 h-3 text-zinc-400 transition-transform duration-200 ${showLayoutMenu ? 'rotate-180' : ''}`} />
+              </button>
+
+              {/* Space Occupancy Dropdown Menu */}
+              {showLayoutMenu && (
+                <div className="absolute right-0 mt-2 w-80 bg-[#0E1017] border border-zinc-800/90 rounded-2xl p-4 shadow-[0_16px_50px_rgba(0,0,0,0.9)] z-50 text-xs animate-in fade-in slide-in-from-top-2 duration-150 backdrop-blur-xl">
+                  <div className="flex items-center justify-between pb-2.5 mb-3 border-b border-zinc-800/80">
+                    <div className="flex items-center gap-2">
+                      <div className="p-1 rounded-lg bg-violet-600/20 text-violet-300">
+                        <Sliders className="w-3.5 h-3.5" />
+                      </div>
+                      <span className="font-bold text-white text-xs">Slot Space Occupancy</span>
+                    </div>
+                    <button
+                      onClick={() => setShowLayoutMenu(false)}
+                      className="text-zinc-500 hover:text-white p-1 rounded-lg hover:bg-zinc-800 transition-colors"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+
+                  {/* Visual Space Overview */}
+                  <div className="space-y-3 mb-4">
+                    {/* Files Slot */}
+                    <div>
+                      <div className="flex items-center justify-between text-[11px] mb-1">
+                        <span className="text-zinc-400 flex items-center gap-1.5 font-medium">
+                          <Folder className="w-3 h-3 text-violet-400" />
+                          Files Explorer Slot:
+                        </span>
+                        <span className="font-mono text-zinc-200 font-bold">{isExplorerOpen ? `${sidebarWidth}px` : 'Hidden'}</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="range"
+                          min="150"
+                          max="420"
+                          value={sidebarWidth}
+                          disabled={!isExplorerOpen}
+                          onChange={(e) => {
+                            setSidebarWidth(parseInt(e.target.value, 10));
+                            setTimeout(() => editorRef.current?.layout(), 30);
+                          }}
+                          className="flex-1 h-1.5 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-violet-500 disabled:opacity-40"
+                        />
+                        <button
+                          onClick={() => setIsExplorerOpen(!isExplorerOpen)}
+                          className="px-2 py-0.5 rounded text-[10px] font-bold bg-zinc-800 hover:bg-zinc-700 text-zinc-300 transition-colors"
+                        >
+                          {isExplorerOpen ? 'Hide' : 'Show'}
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Output Slide Slot */}
+                    <div>
+                      <div className="flex items-center justify-between text-[11px] mb-1">
+                        <span className="text-zinc-400 flex items-center gap-1.5 font-medium">
+                          <Terminal className="w-3 h-3 text-emerald-400" />
+                          Output Slide Slot:
+                        </span>
+                        <span className="font-mono text-zinc-200 font-bold">{!isOutputCollapsed ? `${outputWidth}px` : 'Collapsed'}</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="range"
+                          min="240"
+                          max="720"
+                          value={outputWidth}
+                          disabled={isOutputCollapsed}
+                          onChange={(e) => {
+                            setOutputWidth(parseInt(e.target.value, 10));
+                            setTimeout(() => editorRef.current?.layout(), 30);
+                          }}
+                          className="flex-1 h-1.5 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-emerald-500 disabled:opacity-40"
+                        />
+                        <button
+                          onClick={() => setIsOutputCollapsed(!isOutputCollapsed)}
+                          className="px-2 py-0.5 rounded text-[10px] font-bold bg-zinc-800 hover:bg-zinc-700 text-zinc-300 transition-colors"
+                        >
+                          {isOutputCollapsed ? 'Expand' : 'Collapse'}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Presets Title */}
+                  <div className="text-[10px] uppercase tracking-wider font-bold text-zinc-500 mb-2">
+                    Quick Layout Presets
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-1.5 mb-3">
+                    <button
+                      onClick={() => applyLayoutPreset('default')}
+                      className="p-2 rounded-xl bg-zinc-900/80 hover:bg-zinc-800 border border-zinc-800 hover:border-violet-500/40 text-left transition-all"
+                    >
+                      <div className="font-semibold text-zinc-200 text-[11px] flex items-center gap-1">
+                        <span>⚖️ Balanced</span>
+                      </div>
+                      <div className="text-[9px] text-zinc-500 mt-0.5">220px | Flex | 420px</div>
+                    </button>
+
+                    <button
+                      onClick={() => applyLayoutPreset('wide_notepad')}
+                      className="p-2 rounded-xl bg-zinc-900/80 hover:bg-zinc-800 border border-zinc-800 hover:border-violet-500/40 text-left transition-all"
+                    >
+                      <div className="font-semibold text-zinc-200 text-[11px] flex items-center gap-1">
+                        <span>📝 Wide Notepad</span>
+                      </div>
+                      <div className="text-[9px] text-zinc-500 mt-0.5">170px | Max | 300px</div>
+                    </button>
+
+                    <button
+                      onClick={() => applyLayoutPreset('wide_output')}
+                      className="p-2 rounded-xl bg-zinc-900/80 hover:bg-zinc-800 border border-zinc-800 hover:border-violet-500/40 text-left transition-all"
+                    >
+                      <div className="font-semibold text-zinc-200 text-[11px] flex items-center gap-1">
+                        <span>🖥️ Wide Output</span>
+                      </div>
+                      <div className="text-[9px] text-zinc-500 mt-0.5">170px | Compact | 580px</div>
+                    </button>
+
+                    <button
+                      onClick={() => applyLayoutPreset('focus_notepad')}
+                      className="p-2 rounded-xl bg-zinc-900/80 hover:bg-zinc-800 border border-zinc-800 hover:border-violet-500/40 text-left transition-all"
+                    >
+                      <div className="font-semibold text-zinc-200 text-[11px] flex items-center gap-1">
+                        <span>🎯 Focus Notepad</span>
+                      </div>
+                      <div className="text-[9px] text-zinc-500 mt-0.5">Hidden | Maximum | 320px</div>
+                    </button>
+                  </div>
+
+                  <div className="pt-2 border-t border-zinc-800/80 flex items-center justify-between text-[11px]">
+                    <span className="text-zinc-500 text-[10px]">Tip: Drag dividers directly</span>
+                    <button
+                      onClick={() => applyLayoutPreset('default')}
+                      className="text-violet-400 hover:text-violet-300 font-semibold cursor-pointer flex items-center gap-1"
+                    >
+                      <RotateCcw className="w-3 h-3" />
+                      <span>Reset</span>
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+
             {/* AI Tutor Assistant Trigger */}
             <button
               onClick={() => setIsAiDrawerOpen(true)}
@@ -2225,12 +2547,23 @@ function CodespaceContent() {
           </div>
         </div>
 
+        {/* Full-screen dragging overlay to prevent Monaco/iframe mouse capture */}
+        {activeResizer && (
+          <div className="fixed inset-0 z-[100] cursor-col-resize select-none bg-transparent" />
+        )}
+
         {/* WORKSPACE MIDDLE BODY: EXPLORER + EDITOR + TERMINAL */}
-        <div className="flex-1 flex flex-col md:flex-row min-h-0 overflow-hidden">
+        <div 
+          ref={workspaceBodyRef}
+          className="flex-1 flex flex-col md:flex-row min-h-0 overflow-hidden relative"
+        >
           
-          {/* SIDEBAR EXPLORER */}
+          {/* SLOT 1: SIDEBAR EXPLORER (OUR FILES) */}
           {isExplorerOpen && (
-            <div className="w-48 lg:w-56 bg-[#0c0d14] border-r border-zinc-800/80 flex flex-col shrink-0 animate-in slide-in-from-left duration-200">
+            <div 
+              style={{ width: `${sidebarWidth}px` }}
+              className="bg-[#0c0d14] border-r border-zinc-800/80 flex flex-col shrink-0 animate-in slide-in-from-left duration-200 min-w-[140px] max-w-[480px]"
+            >
               <div className="h-9 flex items-center justify-between px-3 border-b border-zinc-800/80 bg-[#0f111a]">
                 <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest flex items-center gap-1.5">
                   <Folder className="w-3 h-3 text-violet-400" />
@@ -2245,6 +2578,13 @@ function CodespaceContent() {
                   </button>
                   <button onClick={() => window.location.reload()} className="p-1 hover:text-white hover:bg-zinc-800/80 transition-colors rounded" title="Refresh">
                     <RefreshCw className="w-3.5 h-3.5" />
+                  </button>
+                  <button 
+                    onClick={() => setIsExplorerOpen(false)} 
+                    className="p-1 hover:text-white hover:bg-zinc-800/80 transition-colors rounded md:hidden" 
+                    title="Close Explorer"
+                  >
+                    <X className="w-3.5 h-3.5" />
                   </button>
                 </div>
               </div>
@@ -2270,8 +2610,29 @@ function CodespaceContent() {
             </div>
           )}
 
-          {/* MAIN EDITOR COLUMN */}
-          <div className="flex-1 flex flex-col min-w-0 bg-[#090A0F]">
+          {/* DRAGGABLE RESIZER 1: BETWEEN FILES & CODING NOTEPAD */}
+          {isExplorerOpen && (
+            <div
+              onMouseDown={startResizingSidebar}
+              onTouchStart={startResizingSidebar}
+              onDoubleClick={() => {
+                setSidebarWidth(220);
+                try { localStorage.setItem('bvcec-codespace-sidebar-width', '220'); } catch (e) {}
+                setTimeout(() => editorRef.current?.layout(), 50);
+              }}
+              className={`hidden md:flex items-center justify-center w-2 hover:w-2.5 transition-all cursor-col-resize select-none relative z-10 group shrink-0 ${
+                activeResizer === 'sidebar'
+                  ? 'bg-violet-600 shadow-[0_0_12px_rgba(139,92,246,0.9)]'
+                  : 'bg-[#0f111a] hover:bg-violet-600/70 border-x border-zinc-800/90'
+              }`}
+              title="Drag to adjust Files space (Double-click to reset to 220px)"
+            >
+              <div className="w-0.5 h-7 rounded-full bg-zinc-600 group-hover:bg-white group-hover:h-12 transition-all" />
+            </div>
+          )}
+
+          {/* SLOT 2: MAIN CODING NOTEPAD COLUMN */}
+          <div className="flex-1 flex flex-col min-w-[280px] bg-[#090A0F]">
             
             {/* VS CODE STYLE TABS BAR */}
             <div className="h-9 border-b border-zinc-800/80 bg-[#0B0C12] flex items-center justify-between px-2 gap-2 shrink-0 z-10 overflow-x-auto no-scrollbar">
@@ -2341,11 +2702,11 @@ function CodespaceContent() {
                   <Braces className="w-3.5 h-3.5" />
                 </button>
 
-                {/* Reset Code */}
+                {/* Reset / Clear Code */}
                 <button
                   onClick={handleResetCode}
                   className="p-1.5 hover:text-amber-400 hover:bg-zinc-800 rounded-lg transition-colors"
-                  title="Reset to starter template"
+                  title="Clear editor code (Empty file)"
                 >
                   <RotateCcw className="w-3.5 h-3.5" />
                 </button>
@@ -2504,8 +2865,33 @@ function CodespaceContent() {
             </div>
           </div>
 
-          {/* RIGHT SIDE: PRO MULTI-TAB TERMINAL & DIAGNOSTICS CONSOLE */}
-          <div className="w-full md:w-80 lg:w-96 xl:w-[460px] bg-[#0c0d14] border-t md:border-t-0 md:border-l border-zinc-800/90 flex flex-col shrink-0">
+          {/* DRAGGABLE RESIZER 2: BETWEEN CODING NOTEPAD & OUTPUT SLIDE */}
+          {!isOutputCollapsed && (
+            <div
+              onMouseDown={startResizingOutput}
+              onTouchStart={startResizingOutput}
+              onDoubleClick={() => {
+                setOutputWidth(420);
+                try { localStorage.setItem('bvcec-codespace-output-width', '420'); } catch (e) {}
+                setTimeout(() => editorRef.current?.layout(), 50);
+              }}
+              className={`hidden md:flex items-center justify-center w-2 hover:w-2.5 transition-all cursor-col-resize select-none relative z-10 group shrink-0 ${
+                activeResizer === 'output'
+                  ? 'bg-violet-600 shadow-[0_0_12px_rgba(139,92,246,0.9)]'
+                  : 'bg-[#0f111a] hover:bg-violet-600/70 border-x border-zinc-800/90'
+              }`}
+              title="Drag to adjust Output space (Double-click to reset to 420px)"
+            >
+              <div className="w-0.5 h-7 rounded-full bg-zinc-600 group-hover:bg-white group-hover:h-12 transition-all" />
+            </div>
+          )}
+
+          {/* SLOT 3: RIGHT SIDE PRO OUTPUT SLIDE & DIAGNOSTICS CONSOLE */}
+          {!isOutputCollapsed ? (
+            <div 
+              style={{ width: `${outputWidth}px` }}
+              className="w-full md:w-auto bg-[#0c0d14] border-t md:border-t-0 md:border-l border-zinc-800/90 flex flex-col shrink-0 min-w-[240px] max-w-[850px]"
+            >
             
             {/* Terminal Tab Navigation */}
             <div className="h-10 bg-[#0A0C13] border-b border-white/[0.08] px-2.5 flex items-center justify-between shrink-0">
@@ -2572,13 +2958,40 @@ function CodespaceContent() {
                 </button>
               </div>
 
-              <button
-                onClick={() => setIsAiDrawerOpen(true)}
-                className="p-1.5 text-zinc-400 hover:text-violet-300 rounded-lg hover:bg-zinc-800 transition-colors cursor-pointer"
-                title="Expand AI Tutor Drawer"
-              >
-                <Maximize className="w-3.5 h-3.5" />
-              </button>
+              <div className="flex items-center gap-1 text-zinc-400">
+                {/* Adjust Space / Quick Toggle Width */}
+                <button
+                  onClick={() => {
+                    setOutputWidth(prev => prev > 500 ? 380 : 580);
+                    setTimeout(() => editorRef.current?.layout(), 50);
+                  }}
+                  className="p-1.5 hover:text-white rounded-lg hover:bg-zinc-800 transition-colors cursor-pointer hidden md:flex items-center"
+                  title={outputWidth > 500 ? "Compact Output Slide (380px)" : "Expand Output Slide (580px)"}
+                >
+                  <Sliders className="w-3.5 h-3.5" />
+                </button>
+
+                {/* Collapse Output Slide */}
+                <button
+                  onClick={() => {
+                    setIsOutputCollapsed(true);
+                    setTimeout(() => editorRef.current?.layout(), 50);
+                  }}
+                  className="p-1.5 hover:text-white rounded-lg hover:bg-zinc-800 transition-colors cursor-pointer hidden md:flex items-center"
+                  title="Collapse Output Slide"
+                >
+                  <Minimize2 className="w-3.5 h-3.5" />
+                </button>
+
+                {/* AI Tutor Drawer Trigger */}
+                <button
+                  onClick={() => setIsAiDrawerOpen(true)}
+                  className="p-1.5 hover:text-violet-300 rounded-lg hover:bg-zinc-800 transition-colors cursor-pointer"
+                  title="Expand AI Tutor Drawer"
+                >
+                  <Maximize className="w-3.5 h-3.5" />
+                </button>
+              </div>
             </div>
 
             {/* TAB CONTENT 1: OUTPUT CONSOLE */}
@@ -2991,6 +3404,28 @@ function CodespaceContent() {
               </div>
             )}
           </div>
+        ) : (
+          <div 
+            onClick={() => {
+              setIsOutputCollapsed(false);
+              setTimeout(() => editorRef.current?.layout(), 50);
+            }}
+            className="hidden md:flex flex-col items-center justify-between py-4 px-1.5 bg-[#0B0C12] border-l border-zinc-800/90 hover:bg-zinc-800/50 cursor-pointer transition-all w-11 shrink-0 select-none group"
+            title="Click to expand Output Panel"
+          >
+            <div className="flex flex-col items-center gap-2">
+              <div className="p-1.5 rounded-xl bg-violet-600/20 text-violet-300 border border-violet-500/30 group-hover:bg-violet-600/35 transition-all shadow-[0_0_10px_rgba(139,92,246,0.2)]">
+                <Terminal className="w-4 h-4" />
+              </div>
+              <span className="text-[11px] font-bold uppercase tracking-wider text-zinc-400 [writing-mode:vertical-rl] rotate-180 group-hover:text-white transition-colors mt-2">
+                Console Output
+              </span>
+            </div>
+            <div className="p-1 text-zinc-500 group-hover:text-white transition-colors">
+              <ChevronRight className="w-4 h-4" />
+            </div>
+          </div>
+        )}
         </div>
       </div>
 

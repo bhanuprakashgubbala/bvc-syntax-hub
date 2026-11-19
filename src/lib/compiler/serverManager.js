@@ -4,6 +4,7 @@ import { executeCEJudge } from './adapters/ceJudgeAdapter.js';
 import { executeCodapi } from './adapters/codapiAdapter.js';
 import { executeJDoodle } from './adapters/jdoodleAdapter.js';
 import { executeOnlineCompiler } from './adapters/onlineCompilerAdapter.js';
+import { executeLocalCode } from './localRunner.js';
 
 /**
  * Maps server ID to its execution adapter
@@ -14,6 +15,7 @@ const ADAPTER_REGISTRY = {
   [SERVERS.JDOODLE]: executeJDoodle,
   [SERVERS.CODAPI]: executeCodapi,
   [SERVERS.CE_JUDGE]: executeCEJudge,
+  'local': executeLocalCode,
 };
 
 /**

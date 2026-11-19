@@ -40,9 +40,23 @@ export default function FacultyObservationsPage() {
   const [activeTab, setActiveTab] = useState('document'); // 'document' | 'aiReport' | 'history'
   const [evalMarks, setEvalMarks] = useState('');
   const [evalFeedback, setEvalFeedback] = useState('');
+  // Granular Manual Rubric Marks Breakdown
+  const [rubricAim, setRubricAim] = useState('2');
+  const [rubricAlgo, setRubricAlgo] = useState('3');
+  const [rubricComp, setRubricComp] = useState('2');
+  const [rubricExec, setRubricExec] = useState('3');
   const [submittingEval, setSubmittingEval] = useState(false);
   const [message, setMessage] = useState(null);
   const [viewCodeSnapshot, setViewCodeSnapshot] = useState(false);
+
+  const updateRubricTotal = (aim, algo, comp, exec) => {
+    const a = parseFloat(aim) || 0;
+    const b = parseFloat(algo) || 0;
+    const c = parseFloat(comp) || 0;
+    const d = parseFloat(exec) || 0;
+    const total = Math.min(10, Math.max(0, Math.round((a + b + c + d) * 10) / 10));
+    setEvalMarks(String(total));
+  };
 
   const loadObservations = async () => {
     try {
@@ -75,10 +89,36 @@ export default function FacultyObservationsPage() {
       ? String(obs.facultyFinalMarks)
       : (obs.aiRecommendedMarks !== null && obs.aiRecommendedMarks !== undefined
           ? String(obs.aiRecommendedMarks)
-          : (obs.marksAwarded !== null && obs.marksAwarded !== undefined ? String(obs.marksAwarded) : ''));
+          : (obs.marksAwarded !== null && obs.marksAwarded !== undefined ? String(obs.marksAwarded) : '10'));
           
     setEvalMarks(initialMarks);
     setEvalFeedback(obs.facultyRemarks || obs.feedback || '');
+
+    // Parse existing rubric marks if available
+    let initialAim = 2;
+    let initialAlgo = 3;
+    let initialComp = 2;
+    let initialExec = 3;
+    try {
+      const rep = obs.aiEvaluationReport ? (typeof obs.aiEvaluationReport === 'string' ? JSON.parse(obs.aiEvaluationReport) : obs.aiEvaluationReport) : null;
+      if (rep?.facultyEvaluation?.marksBreakdown) {
+        const mb = rep.facultyEvaluation.marksBreakdown;
+        initialAim = mb.aim ?? 2;
+        initialAlgo = mb.algorithm ?? 3;
+        initialComp = mb.compilation ?? 2;
+        initialExec = mb.execution ?? 3;
+      } else if (rep?.breakdown) {
+        initialAim = Math.min(2, rep.breakdown.observationCompleteness?.score ?? 2);
+        initialAlgo = Math.min(3, rep.breakdown.algorithmCorrectness?.score ?? 3);
+        initialComp = Math.min(2, rep.breakdown.programCorrectness?.score ?? 2);
+        initialExec = Math.min(3, rep.breakdown.outputAccuracy?.score ?? 3);
+      }
+    } catch (e) {}
+
+    setRubricAim(String(initialAim));
+    setRubricAlgo(String(initialAlgo));
+    setRubricComp(String(initialComp));
+    setRubricExec(String(initialExec));
   };
 
   const handleEvaluate = async (action = 'APPROVED') => {
@@ -106,7 +146,14 @@ export default function FacultyObservationsPage() {
           marksAwarded: action === 'REJECTED' ? 0 : parseFloat(evalMarks || 0),
           facultyRemarks: evalFeedback,
           action,
-          facultyId
+          facultyId,
+          marksBreakdown: {
+            aim: parseFloat(rubricAim) || 0,
+            algorithm: parseFloat(rubricAlgo) || 0,
+            compilation: parseFloat(rubricComp) || 0,
+            execution: parseFloat(rubricExec) || 0,
+            total: action === 'REJECTED' ? 0 : parseFloat(evalMarks || 0)
+          }
         })
       });
 
@@ -688,58 +735,186 @@ export default function FacultyObservationsPage() {
               </div>
             )}
 
-            {/* Faculty Evaluation Control & Action Panel */}
+            {/* Faculty Evaluation Control & Action Panel with Granular Rubric Breakdown */}
             <div className="p-4 md:p-5 rounded-xl bg-[#181824] border border-indigo-500/30 space-y-4">
               <div className="flex items-center justify-between flex-wrap gap-2">
-                <h4 className="font-bold text-white text-sm flex items-center gap-2">
-                  <Award className="w-4 h-4 text-indigo-400" />
-                  Academic Grading & Faculty Verification (Final Institutional Marks)
-                </h4>
+                <div>
+                  <h4 className="font-bold text-white text-sm flex items-center gap-2">
+                    <Award className="w-4 h-4 text-indigo-400" />
+                    Academic Grading & Faculty Verification (Rubric-based Manual Marks)
+                  </h4>
+                  <p className="text-[11px] text-zinc-400 mt-0.5">
+                    Allocate manual marks for each component individually (Aim, Algorithm, Compilation, Execution) or adjust total.
+                  </p>
+                </div>
 
-                {activeObs.aiRecommendedMarks !== null && (
+                <div className="flex items-center gap-2">
+                  {activeObs.aiRecommendedMarks !== null && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const rep = activeObs.aiEvaluationReport ? (typeof activeObs.aiEvaluationReport === 'string' ? JSON.parse(activeObs.aiEvaluationReport) : activeObs.aiEvaluationReport) : null;
+                        const a = String(Math.min(2, rep?.breakdown?.observationCompleteness?.score ?? 2));
+                        const b = String(Math.min(3, rep?.breakdown?.algorithmCorrectness?.score ?? 3));
+                        const c = String(Math.min(2, rep?.breakdown?.programCorrectness?.score ?? 2));
+                        const d = String(Math.min(3, rep?.breakdown?.outputAccuracy?.score ?? 3));
+                        setRubricAim(a);
+                        setRubricAlgo(b);
+                        setRubricComp(c);
+                        setRubricExec(d);
+                        setEvalMarks(String(activeObs.aiRecommendedMarks));
+                      }}
+                      className="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-violet-600/20 hover:bg-violet-600/30 text-violet-300 border border-violet-500/30 text-xs font-semibold"
+                    >
+                      <Sparkles className="w-3.5 h-3.5" />
+                      <span>⚡ Auto-Fill from AI ({activeObs.aiRecommendedMarks}/10)</span>
+                    </button>
+                  )}
                   <button
                     type="button"
-                    onClick={() => setEvalMarks(String(activeObs.aiRecommendedMarks))}
-                    className="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-violet-600/20 hover:bg-violet-600/30 text-violet-300 border border-violet-500/30 text-xs font-semibold"
+                    onClick={() => {
+                      setRubricAim('2');
+                      setRubricAlgo('3');
+                      setRubricComp('2');
+                      setRubricExec('3');
+                      setEvalMarks('10');
+                    }}
+                    className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/30 text-xs font-semibold"
                   >
-                    <Sparkles className="w-3.5 h-3.5" />
-                    <span>⚡ 1-Click Accept AI Marks ({activeObs.aiRecommendedMarks}/10)</span>
+                    <span>💯 10/10 Full</span>
                   </button>
-                )}
+                </div>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <div>
-                  <label className="block text-xs font-semibold text-zinc-400 mb-1.5 uppercase">
-                    Final Faculty Marks (0 - 10) *
-                  </label>
-                  <input
-                    type="number"
-                    min="0"
-                    max="10"
-                    step="0.5"
-                    placeholder="e.g. 9"
-                    value={evalMarks}
-                    onChange={(e) => setEvalMarks(e.target.value)}
-                    className="w-full bg-[#12121c] border border-zinc-700 rounded-lg px-3 py-2 text-sm text-zinc-100 focus:outline-none focus:border-indigo-500 font-mono font-bold"
-                  />
-                  <span className="text-[10px] text-zinc-500 mt-1 block">
-                    AI recommendation: {activeObs.aiRecommendedMarks ?? 'N/A'}/10
-                  </span>
-                </div>
+              {/* Rubric Breakdown Grid (Aim, Algorithm, Compilation, Execution, Total) */}
+              <div className="p-3.5 rounded-xl bg-[#10101a] border border-zinc-800 space-y-3">
+                <span className="text-[11px] font-bold uppercase tracking-wider text-indigo-300 block">
+                  Component-Wise Rubric Marks Breakdown (Manual Faculty Control)
+                </span>
 
-                <div className="sm:col-span-2">
-                  <label className="block text-xs font-semibold text-zinc-400 mb-1.5 uppercase">
-                    Faculty Remarks & Institutional Feedback *
-                  </label>
-                  <textarea
-                    rows="2"
-                    placeholder="e.g. Program logic and execution verified. Accurate test results."
-                    value={evalFeedback}
-                    onChange={(e) => setEvalFeedback(e.target.value)}
-                    className="w-full bg-[#12121c] border border-zinc-700 rounded-lg px-3 py-2 text-xs md:text-sm text-zinc-100 focus:outline-none focus:border-indigo-500 resize-none"
-                  />
+                <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+                  {/* Aim Marks */}
+                  <div className="p-2.5 rounded-lg bg-[#151522] border border-zinc-700/80">
+                    <label className="block text-[10px] font-bold text-zinc-300 uppercase mb-1">
+                      1. Aim & Objective
+                    </label>
+                    <div className="flex items-center gap-1">
+                      <input
+                        type="number"
+                        min="0"
+                        max="2"
+                        step="0.5"
+                        value={rubricAim}
+                        onChange={(e) => {
+                          setRubricAim(e.target.value);
+                          updateRubricTotal(e.target.value, rubricAlgo, rubricComp, rubricExec);
+                        }}
+                        className="w-full bg-[#0c0c14] border border-zinc-700 rounded px-2 py-1 text-sm text-center font-mono font-bold text-white focus:outline-none focus:border-indigo-500"
+                      />
+                      <span className="text-xs text-zinc-500 font-mono font-bold">/2</span>
+                    </div>
+                  </div>
+
+                  {/* Algorithm Marks */}
+                  <div className="p-2.5 rounded-lg bg-[#151522] border border-zinc-700/80">
+                    <label className="block text-[10px] font-bold text-zinc-300 uppercase mb-1">
+                      2. Algorithm / Logic
+                    </label>
+                    <div className="flex items-center gap-1">
+                      <input
+                        type="number"
+                        min="0"
+                        max="3"
+                        step="0.5"
+                        value={rubricAlgo}
+                        onChange={(e) => {
+                          setRubricAlgo(e.target.value);
+                          updateRubricTotal(rubricAim, e.target.value, rubricComp, rubricExec);
+                        }}
+                        className="w-full bg-[#0c0c14] border border-zinc-700 rounded px-2 py-1 text-sm text-center font-mono font-bold text-white focus:outline-none focus:border-indigo-500"
+                      />
+                      <span className="text-xs text-zinc-500 font-mono font-bold">/3</span>
+                    </div>
+                  </div>
+
+                  {/* Compilation Marks */}
+                  <div className="p-2.5 rounded-lg bg-[#151522] border border-zinc-700/80">
+                    <label className="block text-[10px] font-bold text-zinc-300 uppercase mb-1">
+                      3. Compilation / Syntax
+                    </label>
+                    <div className="flex items-center gap-1">
+                      <input
+                        type="number"
+                        min="0"
+                        max="2"
+                        step="0.5"
+                        value={rubricComp}
+                        onChange={(e) => {
+                          setRubricComp(e.target.value);
+                          updateRubricTotal(rubricAim, rubricAlgo, e.target.value, rubricExec);
+                        }}
+                        className="w-full bg-[#0c0c14] border border-zinc-700 rounded px-2 py-1 text-sm text-center font-mono font-bold text-white focus:outline-none focus:border-indigo-500"
+                      />
+                      <span className="text-xs text-zinc-500 font-mono font-bold">/2</span>
+                    </div>
+                  </div>
+
+                  {/* Execution Marks */}
+                  <div className="p-2.5 rounded-lg bg-[#151522] border border-zinc-700/80">
+                    <label className="block text-[10px] font-bold text-zinc-300 uppercase mb-1">
+                      4. Execution & Correct
+                    </label>
+                    <div className="flex items-center gap-1">
+                      <input
+                        type="number"
+                        min="0"
+                        max="3"
+                        step="0.5"
+                        value={rubricExec}
+                        onChange={(e) => {
+                          setRubricExec(e.target.value);
+                          updateRubricTotal(rubricAim, rubricAlgo, rubricComp, e.target.value);
+                        }}
+                        className="w-full bg-[#0c0c14] border border-zinc-700 rounded px-2 py-1 text-sm text-center font-mono font-bold text-white focus:outline-none focus:border-indigo-500"
+                      />
+                      <span className="text-xs text-zinc-500 font-mono font-bold">/3</span>
+                    </div>
+                  </div>
+
+                  {/* Total Marks */}
+                  <div className="p-2.5 rounded-lg bg-indigo-950/40 border border-indigo-500/40 shadow-inner col-span-2 sm:col-span-1">
+                    <label className="block text-[10px] font-bold text-indigo-300 uppercase mb-1">
+                      Total Awarded *
+                    </label>
+                    <div className="flex items-center gap-1">
+                      <input
+                        type="number"
+                        min="0"
+                        max="10"
+                        step="0.5"
+                        placeholder="10"
+                        value={evalMarks}
+                        onChange={(e) => setEvalMarks(e.target.value)}
+                        className="w-full bg-[#0c0c14] border border-indigo-500/60 rounded px-2 py-1 text-sm text-center font-mono font-extrabold text-emerald-400 focus:outline-none focus:border-indigo-400"
+                      />
+                      <span className="text-xs text-indigo-300 font-mono font-bold">/10</span>
+                    </div>
+                  </div>
                 </div>
+              </div>
+
+              {/* Faculty Remarks & Verification */}
+              <div>
+                <label className="block text-xs font-semibold text-zinc-400 mb-1.5 uppercase">
+                  Faculty Institutional Remarks & Verification Feedback *
+                </label>
+                <textarea
+                  rows="2"
+                  placeholder="e.g. Program logic and execution verified. Accurate test results."
+                  value={evalFeedback}
+                  onChange={(e) => setEvalFeedback(e.target.value)}
+                  className="w-full bg-[#12121c] border border-zinc-700 rounded-lg px-3 py-2 text-xs md:text-sm text-zinc-100 focus:outline-none focus:border-indigo-500 resize-none"
+                />
               </div>
 
               {/* Quick Feedback Suggestions */}

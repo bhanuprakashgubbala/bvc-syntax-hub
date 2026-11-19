@@ -75,6 +75,33 @@ export default function LoginPage() {
     return parseStudentRegisterNumber(regForm.registerNumber.trim());
   }, [regForm.registerNumber]);
 
+  // On mount: check URL query params and clear stale sessions if arriving at login
+  useEffect(() => {
+    try {
+      if (typeof window !== "undefined") {
+        const params = new URLSearchParams(window.location.search);
+        const roleParam = params.get("role")?.toUpperCase();
+        if (roleParam === "STUDENT" || roleParam === "FACULTY" || roleParam === "HOD") {
+          handleRoleSelect(roleParam);
+        } else {
+          // Default to student on fresh landing
+          setActiveRole("STUDENT");
+        }
+
+        // If logging out or explicitly visiting login, clear stale user credentials
+        if (params.get("logout") === "true") {
+          localStorage.removeItem("bvcec-user-id");
+          localStorage.removeItem("bvcec-user-email");
+          localStorage.removeItem("bvcec-user-name");
+          localStorage.removeItem("bvcec-user-role");
+          localStorage.removeItem("bvcec-user-roll");
+          localStorage.removeItem("nextgen-user-id");
+          localStorage.removeItem("nextgen-user-role");
+        }
+      }
+    } catch (e) {}
+  }, []);
+
   // Switch Active Role
   const handleRoleSelect = (role) => {
     setActiveRole(role);
@@ -93,14 +120,41 @@ export default function LoginPage() {
     }
   };
 
+  // Auto-detect role when typing identifier
+  const handleIdentifierChange = (val) => {
+    setLoginIdentifier(val);
+    const clean = val.trim().toLowerCase();
+    // Student roll number pattern (10 chars or starts with admission year)
+    if (
+      /^\d{2}[a-z0-9]/i.test(clean) ||
+      clean.startsWith('25') ||
+      clean.startsWith('24') ||
+      clean.startsWith('23') ||
+      clean.startsWith('22')
+    ) {
+      if (activeRole !== "STUDENT") {
+        setActiveRole("STUDENT");
+      }
+    } else if (clean.startsWith('faculty.') || clean.includes('faculty') || clean.startsWith('prof.')) {
+      if (activeRole !== "FACULTY") {
+        setActiveRole("FACULTY");
+      }
+    } else if (clean.startsWith('hod.') || clean.includes('hod') || clean.startsWith('dr.')) {
+      if (activeRole !== "HOD") {
+        setActiveRole("HOD");
+      }
+    }
+  };
+
   // Persist session keys for all parts of the application
   const persistSessionAndRedirect = (user) => {
+    const genuineRole = (user.role || activeRole || "STUDENT").toUpperCase();
     try {
       // 1. BVCEC Institutional Session Storage
       localStorage.setItem("bvcec-user-id", user.id);
       localStorage.setItem("bvcec-user-email", user.email);
       localStorage.setItem("bvcec-user-name", user.fullName || "User");
-      localStorage.setItem("bvcec-user-role", user.role || activeRole);
+      localStorage.setItem("bvcec-user-role", genuineRole);
       localStorage.setItem("bvcec-user-roll", user.rollNumber || user.studentId || "");
       localStorage.setItem("bvcec-user-section", user.sectionName || "CSE-A");
       localStorage.setItem("bvcec-user-section-id", user.sectionId || "");
@@ -109,7 +163,7 @@ export default function LoginPage() {
       localStorage.setItem("nextgen-user-id", user.id);
       localStorage.setItem("nextgen-user-email", user.email);
       localStorage.setItem("nextgen-user-name", user.fullName || "User");
-      localStorage.setItem("nextgen-user-role", user.role || activeRole);
+      localStorage.setItem("nextgen-user-role", genuineRole);
       localStorage.setItem("nextgen-user-studentid", user.rollNumber || user.studentId || user.employeeId || "");
       localStorage.setItem("nextgen-user-dept", user.department || "Computer Science & Engineering");
       localStorage.setItem("nextgen-user-section", user.sectionName || "CSE-A");
@@ -118,17 +172,17 @@ export default function LoginPage() {
       localStorage.setItem("nextgen-user-points", String(user.totalPoints || 0));
 
       if (rememberMe) {
-        localStorage.setItem("codex_remembered_role", user.role || activeRole);
+        localStorage.setItem("codex_remembered_role", genuineRole);
         localStorage.setItem("codex_remembered_email", user.email);
       }
     } catch (e) {
       console.warn("Storage warning:", e);
     }
 
-    // Role-based portal routing
-    if (user.role === "HOD") {
+    // Role-based portal routing: Students strictly go to /user
+    if (genuineRole === "HOD") {
       router.push("/hod");
-    } else if (user.role === "FACULTY") {
+    } else if (genuineRole === "FACULTY") {
       router.push("/faculty");
     } else {
       router.push("/user");
@@ -138,6 +192,7 @@ export default function LoginPage() {
   // Standard Login (Student, Faculty, HOD)
   const handleLogin = async (e) => {
     e.preventDefault();
+    if (isLoading) return; // Prevent duplicate rapid submissions
     setError(null);
     setSuccessMsg(null);
     setIsLoading(true);
@@ -157,9 +212,7 @@ export default function LoginPage() {
 
       if (res.ok && data.success && data.user) {
         setSuccessMsg(`Welcome, ${data.user.fullName}! Entering ${data.user.role} Portal...`);
-        setTimeout(() => {
-          persistSessionAndRedirect(data.user);
-        }, 400);
+        persistSessionAndRedirect(data.user);
       } else {
         setError(data.error || "Authentication failed. Please verify your credentials.");
         setIsLoading(false);
@@ -254,9 +307,7 @@ export default function LoginPage() {
       const data = await res.json();
       if (res.ok && data.success && data.user) {
         setSuccessMsg(`Google SSO Verified! Welcome, ${data.user.fullName}!`);
-        setTimeout(() => {
-          persistSessionAndRedirect(data.user);
-        }, 300);
+        persistSessionAndRedirect(data.user);
       } else {
         setError(data.error || "Google authentication failed.");
         setIsLoading(false);
@@ -327,9 +378,7 @@ export default function LoginPage() {
       if (res.ok && data.success && data.user) {
         setIsGoogleModalOpen(false);
         setSuccessMsg(`Google SSO Verified: ${data.user.fullName}! Entering Portal...`);
-        setTimeout(() => {
-          persistSessionAndRedirect(data.user);
-        }, 300);
+        persistSessionAndRedirect(data.user);
       } else {
         setError(data.error || "Google authorization failed.");
       }
@@ -888,7 +937,7 @@ export default function LoginPage() {
                   <input
                     type="text"
                     value={loginIdentifier}
-                    onChange={(e) => setLoginIdentifier(e.target.value)}
+                    onChange={(e) => handleIdentifierChange(e.target.value)}
                     placeholder={
                       activeRole === "STUDENT" ? "e.g. 25221A0501 or roll number" :
                       activeRole === "FACULTY" ? "e.g. faculty.java@bvcgroup.in" :

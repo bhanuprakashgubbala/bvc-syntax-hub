@@ -1,4 +1,5 @@
 import "./globals.css";
+import { UserProvider } from "@/context/UserContext";
 
 export const metadata = {
   title: "BVC CODELAB - Bonam Venkatachalam Engineering College (Autonomous)",
@@ -13,7 +14,9 @@ export default function RootLayout({ children }) {
   return (
     <html lang="en" className="dark">
       <body className="bg-slate-950 text-slate-200 min-h-screen font-sans antialiased selection:bg-indigo-500/30 selection:text-indigo-200">
-        {children}
+        <UserProvider>
+          {children}
+        </UserProvider>
       </body>
     </html>
   );

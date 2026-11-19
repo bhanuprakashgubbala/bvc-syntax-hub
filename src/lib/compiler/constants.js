@@ -5,6 +5,7 @@
 
 export const SERVERS = {
   DEFAULT: 'default',
+  LOCAL: 'local',
   ONLINECOMPILER: 'onlinecompiler',
   JDOODLE: 'jdoodle',
   CODAPI: 'codapi',
@@ -16,9 +17,18 @@ export const SERVER_METADATA = [
     id: 'default',
     name: 'Default Server',
     shortName: 'Default',
-    description: 'High-availability NextGen compiler cluster (Wandbox & CE multi-runtime)',
+    description: 'High-availability compiler cluster with Native Host Sandbox & CE multi-runtime',
     isDefault: true,
     badge: 'Standard',
+    status: 'online',
+  },
+  {
+    id: 'local',
+    name: 'Host Native Sandbox',
+    shortName: 'Host Native',
+    description: 'Ultra-low latency host isolated worker for Python and Node.js (~30ms)',
+    isDefault: false,
+    badge: 'Ultra Fast',
     status: 'online',
   },
   {
@@ -155,13 +165,25 @@ export function normalizeJavaCode(code) {
   if (!code) return '';
   let res = code;
 
-  // Convert "public class Name" to "class Name" to avoid Wandbox's prog.java filename conflict
-  res = res.replace(/\bpublic\s+class\s+([A-Za-z0-9_$]+)/g, 'class $1');
+  // If Main class already declared with main, preserve
+  if (/\bclass\s+Main\b/.test(res)) {
+    return res;
+  }
 
-  // If there is no class Main, rename the class that contains main to Main
-  if (!/\bclass\s+Main\b/.test(res)) {
-    // Attempt to rename the first class declaration to Main
-    res = res.replace(/\bclass\s+([A-Za-z0-9_$]+)/, 'class Main');
+  // Find the specific class enclosing 'public static void main'
+  const mainIdx = res.indexOf('public static void main');
+  if (mainIdx !== -1) {
+    const beforeMain = res.slice(0, mainIdx);
+    const classMatches = [...beforeMain.matchAll(/(?:public\s+)?class\s+([A-Za-z0-9_$]+)/g)];
+    if (classMatches.length > 0) {
+      const targetClass = classMatches[classMatches.length - 1][1];
+      if (targetClass && targetClass !== 'Main') {
+        res = res.replace(new RegExp(`\\b(public\\s+)?class\\s+${targetClass}\\b`), 'public class Main');
+      }
+    }
+  } else {
+    // Fallback: rename any public class to Main
+    res = res.replace(/\bpublic\s+class\s+([A-Za-z0-9_$]+)/, 'public class Main');
   }
 
   return res;

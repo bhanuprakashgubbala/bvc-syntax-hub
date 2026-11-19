@@ -12,7 +12,8 @@ export async function POST(req) {
       feedback, 
       facultyRemarks,
       action = 'APPROVED', // 'APPROVED' | 'MODIFIED' | 'CORRECTION_REQUIRED' | 'REJECTED'
-      facultyId 
+      facultyId,
+      marksBreakdown
     } = body;
 
     if (!observationId) {
@@ -52,6 +53,28 @@ export async function POST(req) {
       }
     }
 
+    let updatedReport = obs.aiEvaluationReport;
+    if (marksBreakdown) {
+      try {
+        const parsedReport = updatedReport ? JSON.parse(updatedReport) : {};
+        parsedReport.facultyEvaluation = {
+          evaluator: 'FACULTY_MANUAL',
+          marksBreakdown: {
+            aim: marksBreakdown.aim !== undefined ? parseFloat(marksBreakdown.aim) : 2,
+            algorithm: marksBreakdown.algorithm !== undefined ? parseFloat(marksBreakdown.algorithm) : 3,
+            compilation: marksBreakdown.compilation !== undefined ? parseFloat(marksBreakdown.compilation) : 2,
+            execution: marksBreakdown.execution !== undefined ? parseFloat(marksBreakdown.execution) : 3,
+            total: finalMarks
+          },
+          facultyId: validFacultyId,
+          evaluatedAt: new Date().toISOString()
+        };
+        updatedReport = JSON.stringify(parsedReport);
+      } catch (e) {
+        updatedReport = JSON.stringify({ facultyEvaluation: { marksBreakdown, total: finalMarks } });
+      }
+    }
+
     const updated = await db.digitalObservation.update({
       where: { id: observationId },
       data: {
@@ -62,6 +85,7 @@ export async function POST(req) {
         facultyAction: action,
         status: finalStatus,
         evaluatedAt: new Date(),
+        aiEvaluationReport: updatedReport,
         ...(validFacultyId ? { facultyId: validFacultyId } : {})
       },
       include: {

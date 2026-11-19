@@ -40,22 +40,23 @@ import AIChatDrawer from '@/components/AIChatDrawer';
 import { analyzeCode } from '@/utils/codeAnalyzer';
 
 const COMPILER_SERVERS = [
-  { id: 'default', name: '1. Default Server', badge: 'Standard' },
-  { id: 'onlinecompiler', name: '2. OnlineCompiler.io Server', badge: 'Cloud' },
-  { id: 'jdoodle', name: '3. JDoodle Server', badge: 'API' },
+  { id: 'default', name: '1. Default Server (Auto-Optimized)', badge: 'Fastest' },
+  { id: 'local', name: '2. Host Native Sandbox Engine', badge: 'Ultra Fast (~30ms)' },
+  { id: 'ce_judge', name: '3. CE.Judge Server', badge: 'Active CE' },
   { id: 'codapi', name: '4. Codapi Server', badge: 'Active' },
-  { id: 'ce_judge', name: '5. CE.Judge Server', badge: 'Active' }
+  { id: 'onlinecompiler', name: '5. OnlineCompiler.io Server', badge: 'Cloud' },
+  { id: 'jdoodle', name: '6. JDoodle Server', badge: 'API' }
 ];
 
 const STARTER_CODES = {
-  Python: `# Problem: Write your solution below\ndef solution():\n    print("Hello from BVCEC CSE Lab!")\n\nsolution()\n`,
-  Java: `import java.util.*;\n\npublic class Main {\n    public static void main(String[] args) {\n        System.out.println("Hello from BVCEC CSE Lab!");\n    }\n}\n`,
-  'C++': `#include <iostream>\nusing namespace std;\n\nint main() {\n    cout << "Hello from BVCEC CSE Lab!" << endl;\n    return 0;\n}\n`,
-  C: `#include <stdio.h>\n\nint main() {\n    printf("Hello from BVCEC CSE Lab!\\n");\n    return 0;\n}\n`,
-  JavaScript: `// Problem: Write your solution below\nfunction solution() {\n    console.log("Hello from BVCEC CSE Lab!");\n}\n\nsolution();\n`,
-  TypeScript: `// Problem: Write your solution below\nconst message: string = "Hello from BVCEC CSE Lab!";\nconsole.log(message);\n`,
-  Go: `package main\nimport "fmt"\n\nfunc main() {\n    fmt.Println("Hello from BVCEC CSE Lab!")\n}\n`,
-  Rust: `fn main() {\n    println!("Hello from BVCEC CSE Lab!");\n}\n`
+  Python: '',
+  Java: '',
+  'C++': '',
+  C: '',
+  JavaScript: '',
+  TypeScript: '',
+  Go: '',
+  Rust: ''
 };
 
 export default function CodeArenaWorkspace({ problem, initialTask = null }) {
@@ -85,9 +86,7 @@ export default function CodeArenaWorkspace({ problem, initialTask = null }) {
   const [selectedServer, setSelectedServer] = useState('default');
   const [autoFallback, setAutoFallback] = useState(true);
   const [language, setLanguage] = useState(initialTask?.language ? (initialTask.language.charAt(0).toUpperCase() + initialTask.language.slice(1)) : 'Java');
-  const [code, setCode] = useState(
-    initialTask ? '' : (STARTER_CODES[language] || STARTER_CODES['Java'])
-  );
+  const [code, setCode] = useState(initialTask?.starterCode || '');
   const [customInput, setCustomInput] = useState('');
   const [output, setOutput] = useState('');
   const [isRunning, setIsRunning] = useState(false);
@@ -126,7 +125,7 @@ export default function CodeArenaWorkspace({ problem, initialTask = null }) {
     const trimmed = (code || '').trim().replace(/\r\n/g, '\n');
     const isStarter = !trimmed || Object.values(STARTER_CODES).some(s => (s || '').trim().replace(/\r\n/g, '\n') === trimmed);
     if (isStarter) {
-      setCode(STARTER_CODES[newLang] || '');
+      setCode('');
     }
   };
 
@@ -372,21 +371,6 @@ export default function CodeArenaWorkspace({ problem, initialTask = null }) {
     setOutput(`Evaluating test suites via ${getServerDisplayName(selectedServer)}...\n\n`);
     
     try {
-      const compileRes = await fetch('/api/compile', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          server: selectedServer,
-          language: languageMap[language] || language.toLowerCase(),
-          code: code,
-          stdin: customInput || '',
-          autoFallback: autoFallback
-        }),
-      });
-      const compileData = await compileRes.json();
-      const isPass = compileRes.ok && compileData.success;
-      const execTime = compileData.executionTimeMs || 65;
-
       const userId = localStorage.getItem('nextgen-user-id') || localStorage.getItem('bvcec-user-id');
       const subRes = await fetch('/api/user/submission', {
         method: 'POST',
@@ -396,19 +380,45 @@ export default function CodeArenaWorkspace({ problem, initialTask = null }) {
           problemId: problem.id,
           language: languageMap[language] || language.toLowerCase(),
           code: code,
-          status: isPass ? 'Accepted' : 'Runtime Error',
-          executionTimeMs: execTime,
-          pointsEarned: isPass ? (problem.points || 10) : 0
+          server: selectedServer,
+          evaluate: true
         })
       });
 
       const subData = await subRes.json();
+      const evalRes = subData.evaluation;
+      const isAccepted = subData.isAccepted;
 
-      if (isPass) {
-        setOutput(`Test Suite Results (${compileData.usedServerName || getServerDisplayName(selectedServer)}):\n===================\n[✓] Test Case 1: PASS (0.01s)\n[✓] Test Case 2: PASS (0.02s)\n[✓] Hidden Test Case 3: PASS (0.03s)\n\n🎉 Status: ACCEPTED!\nYou earned ${problem.points || 10} points!\nSubmission ID: ${subData.submission?.id || 'SUB-' + Date.now().toString(36)}`);
+      if (evalRes && evalRes.testCaseResults) {
+        let report = `Test Suite Execution Report (${evalRes.serverUsed || getServerDisplayName(selectedServer)}):\n======================================================\n`;
+        evalRes.testCaseResults.forEach((tc) => {
+          const icon = tc.passed ? '[✓]' : '[✗]';
+          report += `${icon} ${tc.name}: ${tc.status} (${tc.executionTime || '0.03s'})\n`;
+          if (!tc.passed && !tc.isHidden && tc.error) {
+            report += `    Error: ${tc.error}\n`;
+          } else if (!tc.passed && !tc.isHidden && tc.actual) {
+            report += `    Expected: ${tc.expected || '(none)'}\n    Actual:   ${tc.actual.slice(0, 120)}\n`;
+          }
+        });
+        report += `------------------------------------------------------\n`;
+        report += `Summary: ${evalRes.passedTestCases} / ${evalRes.totalTestCases} Test Cases Passed\n`;
+        report += `Total Processing Time: ${evalRes.executionTimeMs}ms\n`;
+        report += `Verdict: ${evalRes.status.toUpperCase()}\n`;
+
+        if (isAccepted) {
+          report += `\n🎉 Status: ACCEPTED!\nYou earned ${subData.pointsEarned || problem.points || 10} points!\nSubmission ID: ${subData.submission?.id || 'SUB-' + Date.now().toString(36)}`;
+          setSubmissionSuccess(true);
+        } else {
+          report += `\n❌ Status: ${evalRes.status.toUpperCase()}\nReview diagnostics above and revise your solution.`;
+          setSubmissionSuccess(false);
+        }
+        setOutput(report);
+      } else if (isAccepted) {
+        setOutput(`🎉 Status: ACCEPTED!\nYou earned ${subData.pointsEarned || 10} points!\nSubmission ID: ${subData.submission?.id || 'SUB-' + Date.now().toString(36)}`);
         setSubmissionSuccess(true);
       } else {
-        setOutput(`Test Suite Results:\n===================\n[✗] Execution failed or syntax error.\n${compileData.output || compileData.error}`);
+        setOutput(`Test Suite Results:\n===================\n[✗] Status: ${subData.status || 'Failed'}\n${subData.message || subData.error || ''}`);
+        setSubmissionSuccess(false);
       }
     } catch (err) {
       setOutput("Submission failed: " + err.message);
@@ -821,11 +831,12 @@ export default function CodeArenaWorkspace({ problem, initialTask = null }) {
                     className="bg-transparent text-zinc-200 text-xs font-semibold outline-none cursor-pointer pr-1"
                     title="Select Compiler Server"
                   >
-                    <option value="default" className="bg-zinc-900 text-zinc-200">1. Default Server</option>
-                    <option value="onlinecompiler" className="bg-zinc-900 text-zinc-200">2. OnlineCompiler.io Server</option>
-                    <option value="jdoodle" className="bg-zinc-900 text-zinc-200">3. JDoodle Server</option>
+                    <option value="default" className="bg-zinc-900 text-zinc-200">1. Default Server (Auto-Optimized)</option>
+                    <option value="local" className="bg-zinc-900 text-zinc-200">2. Host Native Sandbox Engine (~30ms)</option>
+                    <option value="ce_judge" className="bg-zinc-900 text-zinc-200">3. CE.Judge Server (Judge0 Open CE)</option>
                     <option value="codapi" className="bg-zinc-900 text-zinc-200">4. Codapi Server</option>
-                    <option value="ce_judge" className="bg-zinc-900 text-zinc-200">5. CE.Judge Server</option>
+                    <option value="onlinecompiler" className="bg-zinc-900 text-zinc-200">5. OnlineCompiler.io Server</option>
+                    <option value="jdoodle" className="bg-zinc-900 text-zinc-200">6. JDoodle Server</option>
                   </select>
                 </div>
 

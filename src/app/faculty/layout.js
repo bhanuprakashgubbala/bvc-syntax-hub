@@ -29,23 +29,37 @@ export default function FacultyLayout({ children }) {
   const [facultyUser, setFacultyUser] = useState(null);
 
   useEffect(() => {
-    const role = localStorage.getItem('bvcec-user-role');
+    const role = (localStorage.getItem('bvcec-user-role') || localStorage.getItem('nextgen-user-role') || '').toUpperCase();
     const name = localStorage.getItem('bvcec-user-name');
     const email = localStorage.getItem('bvcec-user-email');
     const id = localStorage.getItem('bvcec-user-id');
+
+    // Strict Role Guard: Students must NEVER be in the Faculty Portal!
+    if (role === 'STUDENT') {
+      router.replace('/user');
+      return;
+    }
+
+    if (!id && !role) {
+      router.replace('/login?role=faculty');
+      return;
+    }
+
     if (name) {
       setFacultyUser({ id, name, email, role: role || 'FACULTY' });
     } else {
       setFacultyUser({ id: 'faculty-java', name: 'Prof. S. R. Sharma', email: 'faculty.java@bvcgroup.in', role: 'FACULTY' });
     }
-  }, []);
+  }, [router]);
 
   const handleLogout = () => {
     localStorage.removeItem('bvcec-user-role');
     localStorage.removeItem('bvcec-user-id');
     localStorage.removeItem('bvcec-user-name');
     localStorage.removeItem('bvcec-user-email');
-    router.push('/login');
+    localStorage.removeItem('nextgen-user-role');
+    localStorage.removeItem('nextgen-user-id');
+    router.push('/login?logout=true&role=faculty');
   };
 
   return (

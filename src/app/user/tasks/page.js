@@ -25,6 +25,7 @@ import {
   Code2,
   FileText
 } from 'lucide-react';
+import DigitalObservationPdfModal from '@/components/DigitalObservationPdfModal';
 
 export default function StudentTasksPage() {
   const [tasks, setTasks] = useState([]);
@@ -32,6 +33,8 @@ export default function StudentTasksPage() {
   const [loading, setLoading] = useState(true);
   const [selectedSubject, setSelectedSubject] = useState('ALL');
   const [activePreviewObs, setActivePreviewObs] = useState(null);
+  const [isPdfModalOpen, setIsPdfModalOpen] = useState(false);
+  const [pdfSubject, setPdfSubject] = useState('');
 
   const loadStudentTasks = async () => {
     try {
@@ -166,13 +169,28 @@ export default function StudentTasksPage() {
           ))}
         </div>
 
-        <button
-          onClick={loadStudentTasks}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-zinc-900 border border-zinc-800 text-xs text-zinc-300 hover:text-white"
-        >
-          <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
-          <span>Refresh</span>
-        </button>
+        <div className="flex items-center gap-2.5">
+          <button
+            onClick={() => {
+              const targetSubj = selectedSubject !== 'ALL' ? selectedSubject : (subjects.find(s => s !== 'ALL') || 'Data Structures Lab');
+              setPdfSubject(targetSubj);
+              setIsPdfModalOpen(true);
+            }}
+            className="flex items-center gap-2 px-3.5 py-1.5 rounded-lg bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white font-bold text-xs shadow-[0_0_15px_rgba(139,92,246,0.35)] transition-all cursor-pointer"
+            title="Generate multi-page printable digital observation book with faculty digital signatures"
+          >
+            <Printer className="w-3.5 h-3.5" />
+            <span>Export Digital Observation PDF</span>
+          </button>
+
+          <button
+            onClick={loadStudentTasks}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-zinc-900 border border-zinc-800 text-xs text-zinc-300 hover:text-white"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
+            <span>Refresh</span>
+          </button>
+        </div>
       </div>
 
       {/* Tasks Table / Cards */}
@@ -329,6 +347,17 @@ export default function StudentTasksPage() {
           </table>
         </div>
       </div>
+
+      {/* Digital Observation PDF Export Modal */}
+      <DigitalObservationPdfModal
+        isOpen={isPdfModalOpen}
+        onClose={() => setIsPdfModalOpen(false)}
+        subjectName={pdfSubject || 'Computer Science Lab'}
+        subjectCode={tasks.find(t => t.subject === pdfSubject)?.subjectCode || 'CSE-LAB'}
+        student={studentInfo}
+        facultyName={tasks.find(t => t.subject === pdfSubject)?.facultyName || 'Course Faculty In-Charge'}
+        tasksWithObservations={tasks.filter(t => (pdfSubject ? t.subject === pdfSubject : true))}
+      />
     </div>
   );
 }

@@ -8,12 +8,15 @@ import { getInitialWorkspace } from '@/lib/workspaceHelper';
  * Attempts Google tokeninfo API first, with a fallback to decoding the signed JWT payload.
  */
 async function verifyGoogleIdToken(idToken) {
-  // 1. Attempt verification via Google's tokeninfo endpoint
+  // 1. Attempt verification via Google's tokeninfo endpoint with strict 3s timeout
   try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 3000);
     const res = await fetch(
       `https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(idToken)}`,
-      { method: 'GET' }
+      { method: 'GET', signal: controller.signal }
     );
+    clearTimeout(timeoutId);
     if (res.ok) {
       const payload = await res.json();
       return {
@@ -27,10 +30,10 @@ async function verifyGoogleIdToken(idToken) {
       };
     }
   } catch (err) {
-    console.warn('[GOOGLE AUTH] Tokeninfo API unreachable, attempting JWT decode fallback:', err?.message);
+    console.warn('[GOOGLE AUTH] Tokeninfo API unreachable/timeout, attempting JWT decode fallback:', err?.message);
   }
 
-  // 2. Fallback: Parse base64url JWT payload
+  // 2. Fallback: Parse base64url JWT payload instantly
   try {
     const parts = idToken.split('.');
     if (parts.length === 3) {
@@ -96,23 +99,28 @@ export async function POST(req) {
     const withDomain = trimmed.includes('@') ? trimmed : `${trimmed}@bvcgroup.in`;
     const lowerWithDomain = withDomain.toLowerCase();
     const upperWithDomain = withDomain.toUpperCase();
+    const rollUpper = trimmed.split('@')[0].toUpperCase();
+    const rollLower = trimmed.split('@')[0].toLowerCase();
 
-    // Case-insensitive user lookup in database
+    // Fast indexed set lookup across unique fields
+    const candidates = Array.from(new Set([
+      trimmed,
+      lower,
+      upper,
+      withDomain,
+      lowerWithDomain,
+      upperWithDomain,
+      rollUpper,
+      rollLower
+    ])).filter(Boolean);
+
     let user = await db.user.findFirst({
       where: {
         OR: [
-          { email: trimmed },
-          { email: lower },
-          { email: upper },
-          { email: withDomain },
-          { email: lowerWithDomain },
-          { email: upperWithDomain },
-          { rollNumber: trimmed },
-          { rollNumber: upper },
-          { rollNumber: lower },
-          { rollNumber: trimmed.split('@')[0].toUpperCase() },
-          { employeeId: trimmed },
-          { employeeId: upper }
+          { email: { in: candidates } },
+          { rollNumber: { in: candidates } },
+          { studentId: { in: candidates } },
+          { employeeId: { in: candidates } }
         ]
       },
       include: {
@@ -123,13 +131,27 @@ export async function POST(req) {
     const parsed = parseRegistrationNumber(lowerWithDomain);
     const resolvedName = targetName && targetName.trim() !== '' ? targetName : (parsed.fullName || `User ${trimmed.split('@')[0]}`);
 
+    const isStudentFormat = 
+      /^\d{2}[A-Za-z0-9]{8}$/i.test(rollUpper) ||
+      /^\d{2}[A-Za-z0-9]{2,8}$/i.test(rollUpper) ||
+      rollUpper.startsWith('25') ||
+      rollUpper.startsWith('24') ||
+      rollUpper.startsWith('23') ||
+      rollUpper.startsWith('22');
+
     if (!user) {
-      // Determine Role based on email prefix or requestedRole
-      let role = requestedRole || 'STUDENT';
-      if (lower.startsWith('hod.') || lower.includes('hod')) {
+      // Determine Role: Students always strictly mapped to STUDENT
+      let role = 'STUDENT';
+      if (isStudentFormat) {
+        role = 'STUDENT';
+      } else if (lower.startsWith('hod.') || lower.includes('hod') || lower.startsWith('dr.')) {
         role = 'HOD';
       } else if (lower.startsWith('faculty.') || lower.includes('faculty') || lower.includes('prof')) {
         role = 'FACULTY';
+      } else if (requestedRole === 'FACULTY') {
+        role = 'FACULTY';
+      } else if (requestedRole === 'HOD') {
+        role = 'HOD';
       }
 
       const defaultSection = await db.section.findFirst({ where: { name: 'CSE-A' } });
@@ -156,19 +178,25 @@ export async function POST(req) {
           section: true
         }
       });
+    } else if (isStudentFormat && user.role !== 'STUDENT') {
+      // Automatically correct misclassified student accounts
+      await db.user.update({
+        where: { id: user.id },
+        data: { role: 'STUDENT' }
+      }).catch(() => {});
+      user.role = 'STUDENT';
     }
 
     // Record audit log
-    try {
-      await db.auditLog.create({
-        data: {
-          userId: user.id,
-          role: user.role,
-          action: 'GOOGLE_SSO_LOGIN',
-          details: `Authenticated via Google SSO as ${user.role} (${user.email})`
-        }
-      });
-    } catch {}
+    // Record audit log non-blockingly
+    db.auditLog.create({
+      data: {
+        userId: user.id,
+        role: user.role,
+        action: 'GOOGLE_SSO_LOGIN',
+        details: `Authenticated via Google SSO as ${user.role} (${user.email})`
+      }
+    }).catch(() => {});
 
     return NextResponse.json({
       success: true,

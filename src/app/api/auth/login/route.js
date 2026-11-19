@@ -1,40 +1,7 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { parseStudentRegisterNumber, parseRegistrationNumber } from '@/lib/studentParser';
-
-function getInitialWorkspace(studentName, branchShort) {
-  return JSON.stringify({
-    fileSystem: [
-      {
-        id: 'folder-src',
-        name: `${branchShort || 'Code'} Workspace`,
-        type: 'folder',
-        isOpen: true,
-        children: [
-          {
-            id: 'file-main-py',
-            name: 'main.py',
-            type: 'file',
-            language: 'python',
-            code: `# Personal Codespace for ${studentName} (${branchShort || 'Engineering'})\nprint("Welcome to your personal Codespace!")\n`,
-            lastOutput: '',
-            lastStdin: '',
-          },
-          {
-            id: 'file-solution-java',
-            name: 'Solution.java',
-            type: 'file',
-            language: 'java',
-            code: `public class Solution {\n    public static void main(String[] args) {\n        System.out.println("BVCEC CSE Lab Environment Ready.");\n    }\n}\n`,
-            lastOutput: '',
-            lastStdin: '',
-          },
-        ],
-      },
-    ],
-    activeFileId: 'file-main-py',
-  });
-}
+import { getInitialWorkspace } from '@/lib/workspaceHelper';
 
 export async function POST(req) {
   try {
@@ -55,26 +22,28 @@ export async function POST(req) {
     const withDomain = trimmed.includes('@') ? trimmed : `${trimmed}@bvcgroup.in`;
     const lowerWithDomain = withDomain.toLowerCase();
     const upperWithDomain = withDomain.toUpperCase();
+    const rollPartUpper = trimmed.split('@')[0].toUpperCase();
+    const rollPartLower = trimmed.split('@')[0].toLowerCase();
 
-    // 1. Case-insensitive lookup across email, rollNumber, employeeId, studentId
+    // 1. Ultra-fast indexed set lookup across unique fields
+    const candidates = Array.from(new Set([
+      trimmed,
+      lower,
+      upper,
+      withDomain,
+      lowerWithDomain,
+      upperWithDomain,
+      rollPartUpper,
+      rollPartLower
+    ])).filter(Boolean);
+
     let user = await db.user.findFirst({
       where: {
         OR: [
-          { email: trimmed },
-          { email: lower },
-          { email: upper },
-          { email: withDomain },
-          { email: lowerWithDomain },
-          { email: upperWithDomain },
-          { rollNumber: trimmed },
-          { rollNumber: upper },
-          { rollNumber: lower },
-          { rollNumber: trimmed.split('@')[0].toUpperCase() },
-          { employeeId: trimmed },
-          { employeeId: upper },
-          { employeeId: lower },
-          { studentId: trimmed },
-          { studentId: upper }
+          { email: { in: candidates } },
+          { rollNumber: { in: candidates } },
+          { studentId: { in: candidates } },
+          { employeeId: { in: candidates } }
         ]
       },
       include: {
@@ -91,11 +60,41 @@ export async function POST(req) {
       password === 'faculty123' ||
       password === 'hod123';
 
+    // Helper: Determine if identifier belongs to a Student based on BVCEC roll number format
+    const isStudentFormat = 
+      /^\d{2}[A-Za-z0-9]{8}$/i.test(rollPartUpper) ||
+      /^\d{2}[A-Za-z0-9]{2,8}$/i.test(rollPartUpper) ||
+      rollPartUpper.startsWith('25') ||
+      rollPartUpper.startsWith('24') ||
+      rollPartUpper.startsWith('23') ||
+      rollPartUpper.startsWith('22');
+
     // 3. Auto-provision account if user doesn't exist yet but has college credentials or requestedRole
     if (!user) {
       const defaultSection = await db.section.findFirst({ where: { name: 'CSE-A' } });
 
-      if (requestedRole === 'HOD' || lower.includes('hod')) {
+      if (isStudentFormat) {
+        // Enforce STUDENT role for any student roll number format regardless of requestedRole
+        const parsed = parseRegistrationNumber(lowerWithDomain);
+        user = await db.user.create({
+          data: {
+            email: lowerWithDomain,
+            password: password || 'student123',
+            fullName: parsed.fullName || `Student ${trimmed.split('@')[0]}`,
+            studentId: parsed.studentId || trimmed.split('@')[0].toUpperCase(),
+            rollNumber: parsed.rollNumber || trimmed.split('@')[0].toUpperCase(),
+            role: 'STUDENT',
+            organization: 'Bonam Venkatachalam Engineering College',
+            college: 'BVCEC',
+            department: 'Computer Science and Engineering',
+            batchYear: parsed.batchYear || '2029',
+            sectionId: defaultSection?.id,
+            totalPoints: 0,
+            workspaceData: getInitialWorkspace(parsed.fullName, 'CSE'),
+          },
+          include: { section: true }
+        });
+      } else if (requestedRole === 'HOD' || lower.includes('hod') || lower.startsWith('dr.')) {
         user = await db.user.create({
           data: {
             email: lowerWithDomain,
@@ -170,34 +169,26 @@ export async function POST(req) {
       );
     }
 
-    // 5. Role Verification - Allow seamless switching if user role matches
+    // 5. Intelligent Role Resolution:
+    // If the account has a registered role in the DB, always honor that role!
+    // Never allow a Student account to be masqueraded or forced as Faculty,
+    // and seamlessly resolve the user's authentic role without forcing tab switching.
     let effectiveRole = user.role;
-    if (requestedRole && requestedRole.toUpperCase() !== user.role.toUpperCase()) {
-      // If user is HOD, they can access faculty portal
-      if (user.role === 'HOD' && requestedRole === 'FACULTY') {
-        effectiveRole = 'FACULTY';
-      } else {
-        return NextResponse.json(
-          { 
-            success: false, 
-            error: `This account is registered as ${user.role}. Please click the ${user.role} tab above to sign in.` 
-          },
-          { status: 403 }
-        );
-      }
+    if (isStudentFormat) {
+      effectiveRole = 'STUDENT';
+    } else if (user.role === 'HOD' && requestedRole === 'FACULTY') {
+      effectiveRole = 'FACULTY';
     }
 
-    // Record Audit Log safely
-    try {
-      await db.auditLog.create({
-        data: {
-          userId: user.id,
-          role: effectiveRole,
-          action: 'LOGIN',
-          details: `User logged in to ${effectiveRole} portal`
-        }
-      });
-    } catch {}
+    // Record Audit Log non-blockingly for instant response
+    db.auditLog.create({
+      data: {
+        userId: user.id,
+        role: effectiveRole,
+        action: 'LOGIN',
+        details: `User logged in to ${effectiveRole} portal`
+      }
+    }).catch(() => {});
 
     let academicDetails = null;
     if (effectiveRole === 'STUDENT' && (user.rollNumber || user.studentId)) {

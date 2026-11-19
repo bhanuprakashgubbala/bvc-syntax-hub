@@ -19,22 +19,12 @@ import {
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { parseRegistrationNumber } from "@/lib/studentParser";
+import { useUser } from "@/context/UserContext";
 
 export default function TopNav() {
   const router = useRouter();
+  const { user: authUser, logout: authLogout } = useUser();
   const [isProfileOpen, setIsProfileOpen] = useState(false);
-  const [userData, setUserData] = useState({
-    name: "Student",
-    email: "",
-    studentId: "",
-    branchShort: "Student",
-    section: "",
-    department: "",
-    batchYear: "",
-    organization: "BVC Group",
-    points: 0,
-    initials: "ST",
-  });
   const dropdownRef = useRef(null);
 
   const computeInitials = (name, email) => {
@@ -50,50 +40,20 @@ export default function TopNav() {
     return "ST";
   };
 
+  const userData = {
+    name: authUser?.name || authUser?.fullName || "Student",
+    email: authUser?.email || "",
+    studentId: authUser?.studentId || authUser?.rollNumber || "",
+    branchShort: authUser?.branchShort || "Student",
+    section: authUser?.section || "CSE-A",
+    department: authUser?.department || "Computer Science & Engineering",
+    batchYear: authUser?.batchYear || "2029",
+    organization: authUser?.organization || "BVCEC Odalarevu",
+    points: authUser?.points ?? authUser?.totalPoints ?? 0,
+    initials: computeInitials(authUser?.name || authUser?.fullName, authUser?.email),
+  };
+
   useEffect(() => {
-    const userId = localStorage.getItem("nextgen-user-id");
-    const storedEmail = localStorage.getItem("nextgen-user-email");
-    const storedName = localStorage.getItem("nextgen-user-name");
-    const storedPoints = localStorage.getItem("nextgen-user-points");
-
-    if (storedEmail) {
-      const parsed = parseRegistrationNumber(storedEmail);
-      setUserData({
-        name: storedName || parsed.fullName,
-        email: storedEmail,
-        studentId: parsed.studentId,
-        branchShort: parsed.branchShort,
-        department: (parsed.department || '').replace(/\s*\([^)]*Section[^)]*\)/gi, ''),
-        batchYear: parsed.batchYear,
-        organization: parsed.college,
-        points: parseInt(storedPoints || "0", 10),
-        initials: computeInitials(storedName || parsed.fullName, storedEmail),
-      });
-    }
-
-    if (userId) {
-      fetch(`/api/user/me?userId=${userId}`)
-        .then((res) => res.json())
-        .then((data) => {
-          if (data.success && data.user) {
-            const u = data.user;
-            const parsed = parseRegistrationNumber(u.email);
-            setUserData({
-              name: u.fullName || parsed.fullName,
-              email: u.email,
-              studentId: u.studentId || parsed.studentId,
-              branchShort: u.branchShort || parsed.branchShort,
-              department: (u.department || parsed.department || '').replace(/\s*\([^)]*Section[^)]*\)/gi, ''),
-              batchYear: u.batchYear || parsed.batchYear,
-              organization: u.organization || parsed.college,
-              points: u.totalPoints || 0,
-              initials: computeInitials(u.fullName || parsed.fullName, u.email),
-            });
-          }
-        })
-        .catch(() => {});
-    }
-
     const handleClickOutside = (event) => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
         setIsProfileOpen(false);
