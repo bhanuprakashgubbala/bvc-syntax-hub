@@ -4,12 +4,10 @@
 
 [build.environment]
   NODE_VERSION = "20"
-
 [functions]
   included_files = [
-    "prisma/dev.db",
-    "prisma/schema.prisma",
     "prisma/**"
+  ]
   ]
 
 [[plugins]]
