@@ -7,8 +7,6 @@
 
 [functions]
   included_files = [
-    "prisma/dev.db",
-    "prisma/schema.prisma",
     "prisma/**"
   ]
 
