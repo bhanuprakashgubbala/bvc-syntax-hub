@@ -6,11 +6,7 @@
   NODE_VERSION = "20"
 
 [functions]
-  included_files = [
-    "prisma/dev.db",
-    "prisma/schema.prisma",
-    "prisma/**"
-  ]
+  included_files = ["prisma/**"]
 
 [[plugins]]
   package = "@netlify/plugin-nextjs"
